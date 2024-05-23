@@ -3,12 +3,15 @@ package framework.sprint0;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 
-import javax.servlet.*;
-import javax.servlet.http.*;
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
 
 public class FrontController extends HttpServlet {
-    ArrayList<Class<?>> controllers;
+    private ArrayList<Class<?>> controllers;
+    private HashMap<String, Mapping> urlMapping;
 
     public void init() throws ServletException {
         super.init();
@@ -19,23 +22,42 @@ public class FrontController extends HttpServlet {
             controllerPackage = "WEB-INF/classes/" + controllerPackage.replace('.', '/');
         }
         try {
-            controllers = Util.scanClasses(controllerPackage, getServletContext());
-        } catch (Exception e) {
+            controllers = Util.scanClasses(controllerPackage, getServletContext(), Annotation.Controller.class);
+            urlMapping = Util.getUrlMapping(controllers);
+        } catch (
+
+        Exception e) {
             e.printStackTrace();
         }
     }
 
     public void processRequest(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
+        boolean test = false;
+        String requestURI = Util.removeRootSegment(req.getRequestURI());
         res.setContentType("text/html");
         PrintWriter out = res.getWriter();
         out.println("<HTML>");
         out.println("<HEAD><TITLE>Hello Hello</TITLE></HEAD>");
         out.println("<BODY>");
-        out.println("<BIG>Bonjour tout le monde</BIG>");
-        out.println("<BIG>you're here:</BIG>");
-        out.println(req.getRequestURI());
+        out.println("</br>");
+        out.println("<BIG>URL:</BIG>");
+        out.println(requestURI);
+        out.println("</br>");
+        out.println("<BIG>CONTROLLER:</BIG>" + controllers);
+        out.println("</br>");
+        for (Map.Entry<String, Mapping> entry : urlMapping.entrySet()) {
+            String key = entry.getKey();
+            Mapping value = entry.getValue();
+
+            if (key.equals(requestURI)) {
+                out.println("<BIG><p>URLMAPPING:</BIG>" + value.getClassName() + "_"
+                        + value.getMethodeName() + "</p>");
+                test = true;
+                break;
+            }
+        }
+        out.println(!Util.isRoot(req.getRequestURI()) && !test ? "<BIG style=\"color: red;\" >URL NOT FOUND<BIG>" : "");
         out.println("</BODY></HTML>");
-        out.println(controllers);
     }
 
     public void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
