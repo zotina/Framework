@@ -55,7 +55,7 @@ public class Util {
             for (Method method : methods) {
                 if (method.isAnnotationPresent(framework.sprint0.Annotation.Get.class)) {
                     urlMapping.put(method.getAnnotation(framework.sprint0.Annotation.Get.class).value(),
-                            new Mapping(clazz.getSimpleName(), method.getName()));
+                            new Mapping(clazz.getName(), method.getName()));
                 }
             }
         }
@@ -78,5 +78,17 @@ public class Util {
     public static boolean isRoot(String url) {
         int firstSlashIndex = url.indexOf('/');
         return firstSlashIndex != -1 ? url.indexOf('/', firstSlashIndex + 1) == -1 : false;
+    }
+
+    public static Object getValueMethod(String methodName, String className) {
+        try {
+            Class<?> cls = Class.forName(className);
+            Method method = cls.getMethod(methodName);
+            Object obj = cls.newInstance();
+            return method.invoke(obj);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 }

@@ -52,9 +52,13 @@ public class FrontController extends HttpServlet {
             if (key.equals(requestURI)) {
                 out.println("<BIG><p>URLMAPPING:</BIG>" + value.getClassName() + "_"
                         + value.getMethodeName() + "</p>");
+                out.println("</br>");
+                out.println("<BIG><p>MethodeValue:</BIG>"
+                        + (String) Util.getValueMethod(value.getMethodeName(), value.getClassName()) + "</p>");
                 test = true;
                 break;
             }
+
         }
         out.println(!Util.isRoot(req.getRequestURI()) && !test ? "<BIG style=\"color: red;\" >URL NOT FOUND<BIG>" : "");
         out.println("</BODY></HTML>");
