@@ -1,4 +1,4 @@
-package framework.sprint0;
+package framework;
 
 public class Mapping {
     private String className;

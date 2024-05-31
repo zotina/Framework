@@ -1,13 +1,16 @@
-package framework.sprint0;
+package framework;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
 
 import jakarta.servlet.*;
+import jakarta.servlet.http.*;
 
 public class Util {
 
@@ -53,8 +56,8 @@ public class Util {
             Method[] methods = clazz.getDeclaredMethods();
 
             for (Method method : methods) {
-                if (method.isAnnotationPresent(framework.sprint0.Annotation.Get.class)) {
-                    urlMapping.put(method.getAnnotation(framework.sprint0.Annotation.Get.class).value(),
+                if (method.isAnnotationPresent(framework.Annotation.Get.class)) {
+                    urlMapping.put(method.getAnnotation(framework.Annotation.Get.class).value(),
                             new Mapping(clazz.getName(), method.getName()));
                 }
             }
@@ -91,4 +94,15 @@ public class Util {
             return null;
         }
     }
+
+    public static void sendModelView(ModelView modelView, HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        for (Map.Entry<String, Object> entry : modelView.getData().entrySet()) {
+            request.setAttribute(entry.getKey(), entry.getValue());
+            System.out.println(entry.getKey() + "_" + entry.getValue());
+        }
+        RequestDispatcher dispatch = request.getRequestDispatcher(modelView.getUrl());
+        dispatch.forward(request, response);
+    }
+
 }
