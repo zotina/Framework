@@ -1,4 +1,4 @@
-package framework.sprint0;
+package framework;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;

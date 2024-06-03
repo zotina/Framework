@@ -1,4 +1,4 @@
-package framework.sprint0;
+package framework;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -33,6 +33,7 @@ public class FrontController extends HttpServlet {
 
     public void processRequest(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         boolean test = false;
+        Object urlValue;
         String requestURI = Util.removeRootSegment(req.getRequestURI());
         res.setContentType("text/html");
         PrintWriter out = res.getWriter();
@@ -50,11 +51,20 @@ public class FrontController extends HttpServlet {
             Mapping value = entry.getValue();
 
             if (key.equals(requestURI)) {
+                urlValue = Util.getValueMethod(value.getMethodeName(), value.getClassName());
                 out.println("<BIG><p>URLMAPPING:</BIG>" + value.getClassName() + "_"
                         + value.getMethodeName() + "</p>");
                 out.println("</br>");
-                out.println("<BIG><p>MethodeValue:</BIG>"
-                        + (String) Util.getValueMethod(value.getMethodeName(), value.getClassName()) + "</p>");
+                out.println("<BIG><p>MethodeValue:</BIG>");
+                out.println(urlValue);
+                if (urlValue instanceof String) {
+                    out.println((String) urlValue);
+                    test = true;
+                } else if (urlValue instanceof ModelView) {
+                    Util.sendModelView((ModelView) urlValue, req, res);
+                    test = true;
+                }
+                out.println("</p>");
                 test = true;
                 break;
             }
