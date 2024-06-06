@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Map;
 
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
@@ -32,46 +31,17 @@ public class FrontController extends HttpServlet {
     }
 
     public void processRequest(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
-        boolean test = false;
-        Object urlValue;
-        String requestURI = Util.removeRootSegment(req.getRequestURI());
         res.setContentType("text/html");
         PrintWriter out = res.getWriter();
-        out.println("<HTML>");
-        out.println("<HEAD><TITLE>Hello Hello</TITLE></HEAD>");
-        out.println("<BODY>");
-        out.println("</br>");
-        out.println("<BIG>URL:</BIG>");
-        out.println(requestURI);
-        out.println("</br>");
-        out.println("<BIG>CONTROLLER:</BIG>" + controllers);
-        out.println("</br>");
-        for (Map.Entry<String, Mapping> entry : urlMapping.entrySet()) {
-            String key = entry.getKey();
-            Mapping value = entry.getValue();
-
-            if (key.equals(requestURI)) {
-                urlValue = Util.getValueMethod(value.getMethodeName(), value.getClassName());
-                out.println("<BIG><p>URLMAPPING:</BIG>" + value.getClassName() + "_"
-                        + value.getMethodeName() + "</p>");
-                out.println("</br>");
-                out.println("<BIG><p>MethodeValue:</BIG>");
-                out.println(urlValue);
-                if (urlValue instanceof String) {
-                    out.println((String) urlValue);
-                    test = true;
-                } else if (urlValue instanceof ModelView) {
-                    Util.sendModelView((ModelView) urlValue, req, res);
-                    test = true;
-                }
-                out.println("</p>");
-                test = true;
-                break;
-            }
-
+        try {
+            Util.processUrl(urlMapping, out, req, res, urlMapping, controllers);
+        } catch (CustomException.BuildException e) {
+            e.printStackTrace();
+        } catch (CustomException.RequestException e) {
+            out.println(e.getMessage());
+        } catch (Exception e) {
+            out.println(e.getMessage());
         }
-        out.println(!Util.isRoot(req.getRequestURI()) && !test ? "<BIG style=\"color: red;\" >URL NOT FOUND<BIG>" : "");
-        out.println("</BODY></HTML>");
     }
 
     public void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
