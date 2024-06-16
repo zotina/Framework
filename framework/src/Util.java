@@ -1,13 +1,14 @@
 package framework;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.net.MalformedURLException;
+import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -95,12 +96,10 @@ public class Util {
         return url.trim().length() == 1;
     }
 
-    public static Object getValueMethod(String methodName, String className) {
+    public static Object getValueMethod(String methodName, HttpServletRequest req,
+            HttpServletResponse res, String className, String url) {
         try {
-            Class<?> cls = Class.forName(className);
-            Method method = cls.getMethod(methodName);
-            Object obj = cls.newInstance();
-            return method.invoke(obj);
+            return invokeFunction(methodName, req, res, className, url);
         } catch (Exception e) {
             e.printStackTrace();
             return null;
@@ -132,7 +131,7 @@ public class Util {
             Mapping value = entry.getValue();
 
             if (key.equals(url)) {
-                urlValue = Util.getValueMethod(value.getMethodeName(), value.getClassName());
+                urlValue = Util.getValueMethod(value.getMethodeName(), req, res, value.getClassName(), url);
                 html += "<BIG><p>URLMAPPING:</BIG>" + value.getClassName() + "_"
                         + value.getMethodeName() + "</p>";
                 html += "</br>";
@@ -187,5 +186,90 @@ public class Util {
             }
         }
         return false;
+    }
+
+    public static Object invokeFunction(String methodName, HttpServletRequest req,
+            HttpServletResponse res, String className, String url)
+            throws Exception {
+        Class<?> cls = Class.forName(className);
+        Method[] methods = cls.getMethods();
+        boolean test = false;
+        String paramName = "";
+        String paramValue = "";
+        Object[] methodArgs = null;
+        for (Method method : methods) {
+            if (method.getName().equals(methodName)) {
+                Parameter[] parameters = method.getParameters();
+                methodArgs = new Object[parameters.length];
+
+                for (int i = 0; i < parameters.length; i++) {
+                    Parameter parameter = parameters[i];
+                    if (url.contains("?")) {
+                        Map<String, String> form = parseQueryString(url);
+                        for (Map.Entry<String, String> entry : form.entrySet()) {
+                            System.out.println(entry.getKey() + " : " + entry.getValue());
+                            if (entry.getKey().equals(parameter.getName())) {
+                                paramValue = entry.getValue();
+                                methodArgs[i] = convertToType(paramValue, parameter.getType());
+                                test = true;
+                            }
+                        }
+                    } else {
+                        if (parameter.isAnnotationPresent(framework.Annotation.Param.class)) {
+                            framework.Annotation.Param annotation = parameter
+                                    .getAnnotation(framework.Annotation.Param.class);
+                            paramName = annotation.value();
+                            paramValue = req.getParameter(paramName);
+                            methodArgs[i] = convertToType(paramValue, parameter.getType());
+                            test = true;
+                        }
+                    }
+                }
+                if (test) {
+                    return method.invoke(cls.newInstance(), methodArgs);
+                }
+            }
+        }
+        Method methode = cls.getMethod(methodName);
+        Object obj = cls.newInstance();
+        return methode.invoke(obj);
+    }
+
+    private static Object convertToType(String paramValue, Class<?> type) {
+        if (type == String.class) {
+            return paramValue;
+        } else if (type == Integer.class || type == int.class) {
+            return Integer.parseInt(paramValue);
+        } else if (type == Double.class || type == double.class) {
+            return Double.parseDouble(paramValue);
+        }
+        return null;
+    }
+
+    public static Map<String, String> parseQueryString(String urlString) {
+        Map<String, String> params = new HashMap<>();
+
+        int questionMarkIndex = urlString.indexOf('?');
+        if (questionMarkIndex != -1) {
+            String queryString = urlString.substring(questionMarkIndex + 1);
+
+            String[] pairs = queryString.split("&");
+
+            for (String pair : pairs) {
+                int equalsIndex = pair.indexOf('=');
+                if (equalsIndex != -1) {
+                    try {
+                        String key = URLDecoder.decode(pair.substring(0, equalsIndex), "UTF-8");
+                        String value = URLDecoder.decode(pair.substring(equalsIndex + 1), "UTF-8");
+
+                        params.put(key.trim(), value.trim());
+                    } catch (UnsupportedEncodingException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+
+        return params;
     }
 }
