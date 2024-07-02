@@ -97,21 +97,16 @@ public class Util {
     }
 
     public static Object getValueMethod(String methodName, HttpServletRequest req,
-            HttpServletResponse res, String className, String url) {
-        try {
-            Class<?> clazz = Class.forName(className);
-            Object object = clazz.newInstance();
-            Method[] methods = clazz.getMethods();
-            for (Method method : methods) {
-                if (method.getName().equalsIgnoreCase(methodName)) {
-                    method.setAccessible(true);
-                    Object[] methodParams = getMethodParams(method, req);
-                    return method.invoke(object, methodParams);
-                }
+            HttpServletResponse res, String className, String url) throws Exception {
+        Class<?> clazz = Class.forName(className);
+        Object object = clazz.newInstance();
+        Method[] methods = clazz.getMethods();
+        for (Method method : methods) {
+            if (method.getName().equalsIgnoreCase(methodName)) {
+                method.setAccessible(true);
+                Object[] methodParams = getMethodParams(method, req);
+                return method.invoke(object, methodParams);
             }
-
-        } catch (Exception e) {
-            e.printStackTrace();
         }
         return null;
     }
@@ -141,7 +136,11 @@ public class Util {
             Mapping value = entry.getValue();
 
             if (key.equals(url)) {
-                urlValue = Util.getValueMethod(value.getMethodeName(), req, res, value.getClassName(), url);
+                try {
+                    urlValue = Util.getValueMethod(value.getMethodeName(), req, res, value.getClassName(), url);
+                } catch (Exception e) {
+                    throw new CustomException.RequestException(e.getMessage());
+                }
                 html += "<BIG><p>URLMAPPING:</BIG>" + value.getClassName() + "_"
                         + value.getMethodeName() + "</p>";
                 html += "</br>";
@@ -199,7 +198,7 @@ public class Util {
     }
 
     protected static Object[] getMethodParams(Method method, HttpServletRequest request)
-            throws IllegalArgumentException {
+            throws Exception {
         Parameter[] parameters = method.getParameters();
         Object[] methodParams = new Object[parameters.length];
 
@@ -208,13 +207,13 @@ public class Util {
             if (parameters[i].isAnnotationPresent(framework.Annotation.Param.class)) {
                 paramName = parameters[i].getAnnotation(framework.Annotation.Param.class).value();
             } else {
-                paramName = parameters[i].getName();
+                throw new Exception("ETU2597");
             }
 
             Class<?> paramType = parameters[i].getType();
 
             // Si le type du paramètre est un objet complexe (non primitif et non String)
-            if (!paramType.isPrimitive() && !paramType.equals(String.class)) {
+            if (!paramType.isPrimitive() && !paramType.equals(String.class) && !paramType.equals(Session.class)) {
                 try {
                     Object paramObject = paramType.getDeclaredConstructor().newInstance();
                     Field[] fields = paramType.getDeclaredFields();
@@ -233,10 +232,12 @@ public class Util {
                         | NoSuchMethodException e) {
                     throw new IllegalArgumentException("Error creating parameter object: " + paramName, e);
                 }
+            } else if (paramType.equals(Session.class)) {
+                methodParams[i] = new Session(request.getSession());
             } else {
                 String paramValue = request.getParameter(paramName);
                 if (paramValue == null) {
-                    throw new IllegalArgumentException("Missing parameter: " + paramName);
+                    throw new IllegalArgumentException("Missing paramet " + paramName);
                 }
                 methodParams[i] = convertToType(paramValue, paramType);
             }
@@ -244,7 +245,7 @@ public class Util {
         return methodParams;
     }
 
-    private static Object convertToType(String paramValue, Class<?> type) {
+    private static Object convertToType(String paramValue, Class<?> type) throws Exception {
         if (paramValue == null || type == null) {
             return null;
         }
@@ -252,17 +253,9 @@ public class Util {
         if (type == String.class) {
             return paramValue;
         } else if (type == Integer.class || type == int.class) {
-            try {
-                return Integer.parseInt(paramValue);
-            } catch (NumberFormatException e) {
-                return null;
-            }
+            return Integer.parseInt(paramValue);
         } else if (type == Double.class || type == double.class) {
-            try {
-                return Double.parseDouble(paramValue);
-            } catch (NumberFormatException e) {
-                return null;
-            }
+            return Double.parseDouble(paramValue);
         }
 
         return null;
