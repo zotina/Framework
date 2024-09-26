@@ -16,6 +16,10 @@ public interface Annotation {
     }
 
     @Retention(RetentionPolicy.RUNTIME)
+    public @interface RestApi {
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.PARAMETER)
     public @interface Param {
         String value();
