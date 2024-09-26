@@ -22,6 +22,7 @@ public class FrontController extends HttpServlet {
         }
         try {
             controllers = Util.scanClasses(controllerPackage, getServletContext(), Annotation.Controller.class);
+            System.out.println("n of controller: " + controllers.size());
             urlMapping = Util.getUrlMapping(controllers);
         } catch (
 
@@ -34,7 +35,7 @@ public class FrontController extends HttpServlet {
         res.setContentType("text/html");
         PrintWriter out = res.getWriter();
         try {
-            Util.processUrl(urlMapping, out, req, res, urlMapping, controllers);
+            Util.processUrl(urlMapping, out, req, res, controllers);
         } catch (CustomException.BuildException e) {
             e.printStackTrace();
         } catch (CustomException.RequestException e) {

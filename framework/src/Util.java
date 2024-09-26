@@ -10,8 +10,12 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.net.MalformedURLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
@@ -22,31 +26,37 @@ public class Util {
             throws MalformedURLException, ClassNotFoundException {
         ArrayList<Class<?>> classes = new ArrayList<>();
 
-        String classPath = servletContext.getResource(source).getPath();
+        String classPath = servletContext.getResource(source).getPath().substring(1).replace("%20", " ");
         File[] packages = new File(classPath).listFiles();
 
         if (packages != null) {
             for (File pkg : packages) {
                 if (pkg.isFile() && pkg.getName().endsWith(".class")) {
                     String className = source.substring("WEB-INF.classes".length()).replace('/', '.');
-
+                    
                     if (className.startsWith(".")) {
                         className = className.substring(1);
                     }
                     if (className.length() > 0 && !className.endsWith(".")) {
                         className += ".";
                     }
-
+                    
                     className += pkg.getName().substring(0, pkg.getName().length() - ".class".length()).replace('/',
-                            '.');
-
+                    '.');
+                    System.out.println("class processed: " + className);
+                    
                     Class<?> clazz = Class.forName(className);
+                    System.out.println("class: " + clazz);
+                    System.out.println(Arrays.toString(clazz.getAnnotations()));
                     if (clazz.isAnnotationPresent((Class<? extends Annotation>) cla)) {
                         classes.add(clazz);
+                        System.out.println("class added: " + clazz);
                     }
+                    System.out.println();
                 }
-
+                
                 else if (pkg.isDirectory()) {
+                    System.out.println("directory found: " + pkg);
                     classes.addAll(scanClasses(source + "/" + pkg.getName(), servletContext, cla));
                 }
             }
@@ -105,7 +115,14 @@ public class Util {
             if (method.getName().equalsIgnoreCase(methodName)) {
                 method.setAccessible(true);
                 Object[] methodParams = getMethodParams(method, req);
-                return method.invoke(object, methodParams);
+                Object obj =method.invoke(object, methodParams);
+                if(method.isAnnotationPresent(framework.Annotation.RestApi.class)){
+                    if(obj instanceof ModelView m ){
+                        return new Gson().toJson(m.getData());
+                    }
+                    return new Gson().toJson(obj);
+                }
+                return obj;
             }
         }
         return null;
@@ -121,8 +138,8 @@ public class Util {
         dispatch.forward(request, response);
     }
 
-    public static void processUrl(HashMap<String, Mapping> map, PrintWriter out, HttpServletRequest req,
-            HttpServletResponse res, HashMap<String, Mapping> urlMapping, ArrayList<Class<?>> controllers)
+    public static void processUrl(HashMap<String, Mapping> urlMapping, PrintWriter out, HttpServletRequest req,
+            HttpServletResponse res, ArrayList<Class<?>> controllers)
             throws ServletException, IOException, CustomException.BuildException, CustomException.RequestException,
             Exception {
         Object urlValue;
@@ -130,11 +147,13 @@ public class Util {
         String html = "";
         String url = Util.removeRootSegment(req.getRequestURI());
         html += Util.header(url, controllers);
-
+        System.out.println("size"+urlMapping.size());
+        out.print("size"+urlMapping.size());
         for (Map.Entry<String, Mapping> entry : urlMapping.entrySet()) {
             String key = entry.getKey();
             Mapping value = entry.getValue();
-
+            System.out.println("key="+key +" url = "+url );
+            out.print("key="+key +" url = "+url );
             if (key.equals(url)) {
                 try {
                     urlValue = Util.getValueMethod(value.getMethodeName(), req, res, value.getClassName(), url);
@@ -149,10 +168,10 @@ public class Util {
 
                 if (urlValue instanceof String s) {
                     html += s;
-                    test = true;
                 } else if (urlValue instanceof ModelView m) {
                     Util.sendModelView(m, req, res);
-                    test = true;
+                }else if(urlValue instanceof  JsonElement  j ){
+                    out.println(j);
                 } else {
                     html = "";
                     Class<?> cls = Class.forName(value.getClassName());
