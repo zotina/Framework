@@ -3,6 +3,7 @@ package framework;
 public class Mapping {
     private String className;
     private String methodeName;
+    private String verbes;
 
     public String getClassName() {
         return className;
@@ -23,8 +24,19 @@ public class Mapping {
     public Mapping() {
     }
 
-    public Mapping(String className, String methodeName) {
+    
+    public Mapping(String className, String methodeName, String verbes) {
         this.className = className;
         this.methodeName = methodeName;
+        this.verbes = verbes;
     }
+
+    public String getVerbes() {
+        return verbes;
+    }
+
+    public void setVerbes(String verbes) {
+        this.verbes = verbes;
+    }
+
 }

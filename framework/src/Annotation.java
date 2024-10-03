@@ -11,7 +11,7 @@ public interface Annotation {
     }
 
     @Retention(RetentionPolicy.RUNTIME)
-    public @interface Get {
+    public @interface Url {
         String value();
     }
 
@@ -23,5 +23,13 @@ public interface Annotation {
     @Target(ElementType.PARAMETER)
     public @interface Param {
         String value();
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface Get {
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface Post {
     }
 }
