@@ -67,14 +67,16 @@ public class Util {
     public static HashMap<String, Mapping> getUrlMapping(ArrayList<Class<?>> controllers)
             throws CustomException.BuildException, CustomException.RequestException {
         HashMap<String, Mapping> urlMapping = new HashMap<>();
+        String verbe;
         for (Class<?> clazz : controllers) {
             Method[] methods = clazz.getDeclaredMethods();
 
             for (Method method : methods) {
-                if (method.isAnnotationPresent(framework.Annotation.Get.class)) {
+                if (method.isAnnotationPresent(framework.Annotation.Url.class)) {
                     if (!classNameExists(urlMapping, method.getName())) {
-                        urlMapping.put(method.getAnnotation(framework.Annotation.Get.class).value(),
-                                new Mapping(clazz.getName(), method.getName()));
+                        verbe = method.isAnnotationPresent(framework.Annotation.Post.class) ? "POST" : "GET";
+                        urlMapping.put(method.getAnnotation(framework.Annotation.Url.class).value(),
+                                new Mapping(clazz.getName(), method.getName(),verbe));
                     } else {
                         throw new CustomException.BuildException(
                                 "duplicate function " +
@@ -138,6 +140,12 @@ public class Util {
         dispatch.forward(request, response);
     }
 
+    public static void processRequest(HttpServletRequest req,Mapping mapping) throws CustomException.RequestException {
+        if(!mapping.getVerbes().equalsIgnoreCase(req.getMethod())){
+            throw new CustomException.RequestException("HTTP 400 Bad Request:");   
+        }
+    }
+
     public static void processUrl(HashMap<String, Mapping> urlMapping, PrintWriter out, HttpServletRequest req,
             HttpServletResponse res, ArrayList<Class<?>> controllers)
             throws ServletException, IOException, CustomException.BuildException, CustomException.RequestException,
@@ -147,14 +155,11 @@ public class Util {
         String html = "";
         String url = Util.removeRootSegment(req.getRequestURI());
         html += Util.header(url, controllers);
-        System.out.println("size"+urlMapping.size());
-        out.print("size"+urlMapping.size());
         for (Map.Entry<String, Mapping> entry : urlMapping.entrySet()) {
             String key = entry.getKey();
             Mapping value = entry.getValue();
-            System.out.println("key="+key +" url = "+url );
-            out.print("key="+key +" url = "+url );
             if (key.equals(url)) {
+                processRequest(req, value);
                 try {
                     urlValue = Util.getValueMethod(value.getMethodeName(), req, res, value.getClassName(), url);
                 } catch (Exception e) {
