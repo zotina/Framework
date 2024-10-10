@@ -1,9 +1,10 @@
 package framework;
 
+import java.util.List;
+
 public class Mapping {
     private String className;
-    private String methodeName;
-    private String verbes;
+    private List<VerbeAction> verbeActions;
 
     public String getClassName() {
         return className;
@@ -13,30 +14,20 @@ public class Mapping {
         this.className = className;
     }
 
-    public String getMethodeName() {
-        return methodeName;
+    
+    public Mapping(String className, List<VerbeAction> verbeActions) {
+        this.className = className;
+        this.verbeActions = verbeActions;
     }
-
-    public void setMethodeName(String methodeName) {
-        this.methodeName = methodeName;
-    }
-
     public Mapping() {
+    }
+    public List<VerbeAction> getVerbeActions(){
+        return verbeActions;
+    }
+
+    public void setVerbeActions(List<VerbeAction> verbeActions) {
+        this.verbeActions = verbeActions;
     }
 
     
-    public Mapping(String className, String methodeName, String verbes) {
-        this.className = className;
-        this.methodeName = methodeName;
-        this.verbes = verbes;
-    }
-
-    public String getVerbes() {
-        return verbes;
-    }
-
-    public void setVerbes(String verbes) {
-        this.verbes = verbes;
-    }
-
 }
