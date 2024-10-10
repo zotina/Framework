@@ -65,25 +65,26 @@ public class Util {
     }
 
     public static HashMap<String, Mapping> getUrlMapping(ArrayList<Class<?>> controllers)
-            throws CustomException.BuildException, CustomException.RequestException {
+        throws CustomException.BuildException, CustomException.RequestException {
         HashMap<String, Mapping> urlMapping = new HashMap<>();
-        String verbe;
         for (Class<?> clazz : controllers) {
             Method[] methods = clazz.getDeclaredMethods();
-
             for (Method method : methods) {
                 if (method.isAnnotationPresent(framework.Annotation.Url.class)) {
-                    if (!classNameExists(urlMapping, method.getName())) {
-                        verbe = method.isAnnotationPresent(framework.Annotation.Post.class) ? "POST" : "GET";
-                        urlMapping.put(method.getAnnotation(framework.Annotation.Url.class).value(),
-                                new Mapping(clazz.getName(), method.getName(),verbe));
+                    String url = method.getAnnotation(framework.Annotation.Url.class).value();
+                    VerbeAction verbeAction = new VerbeAction();
+                    verbeAction.setMethode(method.getName());
+                    verbeAction.setVerbe(method.isAnnotationPresent(framework.Annotation.Post.class) ? "POST" : "GET");
+
+                    if (!urlMapping.containsKey(url)) {
+                        Mapping mapping = new Mapping();
+                        mapping.setClassName(clazz.getName());
+                        mapping.setVerbeActions(new ArrayList<>());
+                        mapping.getVerbeActions().add(verbeAction);
+                        urlMapping.put(url, mapping);
                     } else {
-                        throw new CustomException.BuildException(
-                                "duplicate function " +
-                                        method.getName()
-                                        + "\n        at " + clazz.getName() + "." + method.getName() + "("
-                                        + clazz.getSimpleName()
-                                        + ".java)");
+                        Mapping existingMapping = urlMapping.get(url);
+                        existingMapping.getVerbeActions().add(verbeAction);
                     }
                 }
             }
@@ -140,64 +141,82 @@ public class Util {
         dispatch.forward(request, response);
     }
 
-    public static void processRequest(HttpServletRequest req,Mapping mapping) throws CustomException.RequestException {
-        if(!mapping.getVerbes().equalsIgnoreCase(req.getMethod())){
+    public static void processRequest(HttpServletRequest req, Mapping mapping) throws CustomException.RequestException {
+        boolean verbFound = false;
+    
+        for (VerbeAction verbeAction : mapping.getVerbeActions()) {
+            if (verbeAction.getVerbe().equalsIgnoreCase(req.getMethod())) {
+                verbFound = true;
+                break;
+            }
+        }
+    
+        if (!verbFound) {
             throw new CustomException.RequestException("HTTP 400 Bad Request:");   
         }
     }
+    
 
-    public static void processUrl(HashMap<String, Mapping> urlMapping, PrintWriter out, HttpServletRequest req,
-            HttpServletResponse res, ArrayList<Class<?>> controllers)
-            throws ServletException, IOException, CustomException.BuildException, CustomException.RequestException,
-            Exception {
-        Object urlValue;
-        boolean test = false;
+    public static void processUrl(HashMap<String, Mapping> urlMapping, PrintWriter out, HttpServletRequest req, HttpServletResponse res, ArrayList<Class<?>> contrôleurs) 
+        throws ServletException, IOException, CustomException.BuildException, CustomException.RequestException, Exception {
+        Object urlValue = null; // Initialisation de urlValue à null
+        boolean trouvé = false;
         String html = "";
         String url = Util.removeRootSegment(req.getRequestURI());
-        html += Util.header(url, controllers);
-        for (Map.Entry<String, Mapping> entry : urlMapping.entrySet()) {
-            String key = entry.getKey();
-            Mapping value = entry.getValue();
-            if (key.equals(url)) {
-                processRequest(req, value);
-                try {
-                    urlValue = Util.getValueMethod(value.getMethodeName(), req, res, value.getClassName(), url);
-                } catch (Exception e) {
-                    throw new CustomException.RequestException(e.getMessage());
-                }
-                html += "<BIG><p>URLMAPPING:</BIG>" + value.getClassName() + "_"
-                        + value.getMethodeName() + "</p>";
-                html += "</br>";
-                html += "<BIG><p>MethodeValue:</BIG>";
-                html += urlValue;
+        html += Util.header(url, contrôleurs);
 
-                if (urlValue instanceof String s) {
-                    html += s;
-                } else if (urlValue instanceof ModelView m) {
-                    Util.sendModelView(m, req, res);
-                }else if(urlValue instanceof  JsonElement  j ){
-                    out.println(j);
-                } else {
-                    html = "";
-                    Class<?> cls = Class.forName(value.getClassName());
-                    throw new CustomException.BuildException(
-                            "can't getValue for type " + (urlValue == null ? "void" : urlValue.getClass())
-                                    + " in method "
-                                    + value.getMethodeName()
-                                    + "\n        at " + value.getClassName() + "." + value.getMethodeName() + "("
-                                    + cls.getSimpleName() + ".java)");
+        for (Map.Entry<String, Mapping> entrée : urlMapping.entrySet()) {
+            String cle = entrée.getKey();
+            Mapping valeur = entrée.getValue();
+
+            if (cle.equals(url)) {
+                for (VerbeAction verbeAction : valeur.getVerbeActions()) {
+                    processRequest(req, valeur);
+
+                    try {
+                        urlValue = Util.getValueMethod(verbeAction.getMethode(), req, res, valeur.getClassName(), url);
+                    } catch (Exception e) {
+                        throw new CustomException.RequestException(e.getMessage()+"process url ");
+                    }
+
+                    html += "<BIG><p>URLMAPPING:</BIG>" + valeur.getClassName() + "_" + verbeAction.getMethode() + "</p>";
+                    html += "</br>";
+                    html += "<BIG><p>MethodeValue:</BIG>";
+                    html += urlValue;
+
+                    if (urlValue instanceof String s) {
+                        html += s;
+                    } else if (urlValue instanceof ModelView m) {
+                        Util.sendModelView(m, req, res);
+                    } else if (urlValue instanceof JsonElement j) {
+                        out.println(j);
+                    } else {
+                        html = "";
+                        Class<?> cls = Class.forName(valeur.getClassName());
+                        throw new CustomException.BuildException(
+                                "Impossible d'obtenir la valeur pour le type " 
+                                + (urlValue == null ? "void" : urlValue.getClass()) 
+                                + " dans la méthode " + verbeAction.getMethode() 
+                                + "\n à " + valeur.getClassName() + "." 
+                                + verbeAction.getMethode() + "(" + cls.getSimpleName() + ".java)"
+                        );
+                    }
+                    out.println("</p>");
+                    trouvé = true;
+                    break;
                 }
-                out.println("</p>");
-                test = true;
                 break;
             }
-
         }
-        if (!Util.isRoot(url) && !test)
-            throw new CustomException.RequestException("ERROR 404 URL: " + req.getRequestURI() + " NOT FOUND");
-        else
+
+       
+        if (!Util.isRoot(url) && !trouvé) {
+            throw new CustomException.RequestException("ERREUR 404 URL: " + req.getRequestURI() + " NON TROUVÉE");
+        } else {
             out.println(html);
+        }
     }
+
 
     public static String header(String requestURI, ArrayList<Class<?>> controllers) {
         String html = "<HTML>" +
@@ -210,15 +229,6 @@ public class Util {
                 "<BIG>CONTROLLER:</BIG>" + controllers +
                 "</br>";
         return html;
-    }
-
-    public static boolean classNameExists(HashMap<String, Mapping> hsmap, String methodName) {
-        for (Mapping mapping : hsmap.values()) {
-            if (mapping.getMethodeName().equals(methodName)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     protected static Object[] getMethodParams(Method method, HttpServletRequest request)
@@ -236,7 +246,6 @@ public class Util {
 
             Class<?> paramType = parameters[i].getType();
 
-            // Si le type du paramètre est un objet complexe (non primitif et non String)
             if (!paramType.isPrimitive() && !paramType.equals(String.class) && !paramType.equals(Session.class)) {
                 try {
                     Object paramObject = paramType.getDeclaredConstructor().newInstance();
@@ -261,7 +270,7 @@ public class Util {
             } else {
                 String paramValue = request.getParameter(paramName);
                 if (paramValue == null) {
-                    throw new IllegalArgumentException("Missing paramet " + paramName);
+                    throw new IllegalArgumentException("Missing parameter " + paramName);
                 }
                 methodParams[i] = convertToType(paramValue, paramType);
             }
