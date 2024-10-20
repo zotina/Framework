@@ -6,11 +6,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 import jakarta.servlet.*;
+import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.http.*;
 
+
+@MultipartConfig
 public class FrontController extends HttpServlet {
     private ArrayList<Class<?>> controllers;
-    private HashMap<String, Mapping> urlMapping;
+    private HashMap<String, Mapping> urlMapping;    
 
     public void init() throws ServletException {
         super.init();
@@ -34,8 +37,12 @@ public class FrontController extends HttpServlet {
     public void processRequest(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         res.setContentType("text/html");
         PrintWriter out = res.getWriter();
+        ResponsePage responsePage =Util.processUrl(urlMapping, out, req, res, controllers); 
+        StatusCode statusCode = responsePage.getStatusCode();
+        out.println("Http "+statusCode.getStatus()+":"+statusCode.getName());
         try {
-            Util.processUrl(urlMapping, out, req, res, controllers);
+            Util.processStatus(statusCode);
+            out.println(responsePage.getHtml());
         } catch (CustomException.BuildException e) {
             e.printStackTrace();
         } catch (CustomException.RequestException e) {

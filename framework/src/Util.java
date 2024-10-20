@@ -141,82 +141,94 @@ public class Util {
         dispatch.forward(request, response);
     }
 
-    public static void processRequest(HttpServletRequest req, Mapping mapping) throws CustomException.RequestException {
+    public static StatusCode processRequest(HttpServletRequest req, Mapping mapping){
         boolean verbFound = false;
     
         for (VerbeAction verbeAction : mapping.getVerbeActions()) {
             if (verbeAction.getVerbe().equalsIgnoreCase(req.getMethod())) {
                 verbFound = true;
-                break;
+                return null;
             }
         }
-    
+        
         if (!verbFound) {
-            throw new CustomException.RequestException("HTTP 400 Bad Request:");   
+            return new StatusCode(400,"Bad Request",false,"can not access request method");  
         }
+        
+        return null;
     }
     
 
-    public static void processUrl(HashMap<String, Mapping> urlMapping, PrintWriter out, HttpServletRequest req, HttpServletResponse res, ArrayList<Class<?>> contrôleurs) 
-        throws ServletException, IOException, CustomException.BuildException, CustomException.RequestException, Exception {
+    public static ResponsePage processUrl(HashMap<String, Mapping> urlMapping, PrintWriter out, HttpServletRequest req, HttpServletResponse res, ArrayList<Class<?>> controleurs) {
         Object urlValue = null; // Initialisation de urlValue à null
-        boolean trouvé = false;
+        boolean trouve = false;
         String html = "";
         String url = Util.removeRootSegment(req.getRequestURI());
-        html += Util.header(url, contrôleurs);
+        try {
+            html += Util.header(url, controleurs);
 
-        for (Map.Entry<String, Mapping> entrée : urlMapping.entrySet()) {
-            String cle = entrée.getKey();
-            Mapping valeur = entrée.getValue();
+            for (Map.Entry<String, Mapping> entree : urlMapping.entrySet()) {
+                String cle = entree.getKey();
+                Mapping valeur = entree.getValue();
 
-            if (cle.equals(url)) {
-                for (VerbeAction verbeAction : valeur.getVerbeActions()) {
-                    processRequest(req, valeur);
+                if (cle.equals(url)) {
+                    for (VerbeAction verbeAction : valeur.getVerbeActions()) {
+                        if (processRequest(req, valeur)!=null) {
+                            return new ResponsePage(processRequest(req, valeur), html);
+                        }
 
-                    try {
                         urlValue = Util.getValueMethod(verbeAction.getMethode(), req, res, valeur.getClassName(), url);
-                    } catch (Exception e) {
-                        throw new CustomException.RequestException(e.getMessage()+"process url ");
-                    }
 
-                    html += "<BIG><p>URLMAPPING:</BIG>" + valeur.getClassName() + "_" + verbeAction.getMethode() + "</p>";
-                    html += "</br>";
-                    html += "<BIG><p>MethodeValue:</BIG>";
-                    html += urlValue;
+                        html += "<BIG><p>URLMAPPING:</BIG>" + valeur.getClassName() + "_" + verbeAction.getMethode() + "</p>";
+                        html += "</br>";
+                        html += "<BIG><p>MethodeValue:</BIG>";
+                        html += urlValue;
 
-                    if (urlValue instanceof String s) {
-                        html += s;
-                    } else if (urlValue instanceof ModelView m) {
-                        Util.sendModelView(m, req, res);
-                    } else if (urlValue instanceof JsonElement j) {
-                        out.println(j);
-                    } else {
-                        html = "";
-                        Class<?> cls = Class.forName(valeur.getClassName());
-                        throw new CustomException.BuildException(
-                                "Impossible d'obtenir la valeur pour le type " 
-                                + (urlValue == null ? "void" : urlValue.getClass()) 
-                                + " dans la méthode " + verbeAction.getMethode() 
-                                + "\n à " + valeur.getClassName() + "." 
-                                + verbeAction.getMethode() + "(" + cls.getSimpleName() + ".java)"
-                        );
+                        if (urlValue instanceof String s) {
+                            html += s;
+                        } else if (urlValue instanceof ModelView m) {
+                            Util.sendModelView(m, req, res);
+                        } else if (urlValue instanceof JsonElement j) {
+                            html += j;
+                        } else {
+                            html = "";
+                            Class<?> cls = Class.forName(valeur.getClassName());
+
+                            return new ResponsePage(new StatusCode(500,"internal server error",false,"Impossible d'obtenir la valeur pour le type " 
+                            + (urlValue == null ? "void" : urlValue.getClass()) 
+                            + " dans la méthode " + verbeAction.getMethode() 
+                            + "\n à " + valeur.getClassName() + "." 
+                            + verbeAction.getMethode() + "(" + cls.getSimpleName() + ".java)"), html); 
+                        }
+                        trouve = true;
+                        break;
                     }
-                    out.println("</p>");
-                    trouvé = true;
                     break;
                 }
-                break;
             }
+            
+            if (!Util.isRoot(url) && !trouve) {
+                return new ResponsePage(new StatusCode(404,"url not found",false,"could not find "+req.getRequestURI()), html);
+            }
+            return new ResponsePage(new StatusCode(200,true), html);
         }
 
-       
-        if (!Util.isRoot(url) && !trouvé) {
-            throw new CustomException.RequestException("ERREUR 404 URL: " + req.getRequestURI() + " NON TROUVÉE");
-        } else {
-            out.println(html);
+        catch (Exception e) {
+            return new ResponsePage(new StatusCode(500,"internal serveur error",false,e.getMessage()), html);
         }
+
     }
 
+    public static void processStatus(StatusCode statusCode) throws CustomException.BuildException,CustomException.RequestException{
+        if (!statusCode.isSuccess() ) {
+            if (statusCode.getStatus() == 500 ){
+                throw new CustomException.BuildException(statusCode.getMessage());
+            }
+            else{
+                throw new CustomException.RequestException(statusCode.getMessage());
+            }
+        }   
+    }
 
     public static String header(String requestURI, ArrayList<Class<?>> controllers) {
         String html = "<HTML>" +
@@ -246,7 +258,7 @@ public class Util {
 
             Class<?> paramType = parameters[i].getType();
 
-            if (!paramType.isPrimitive() && !paramType.equals(String.class) && !paramType.equals(Session.class)) {
+            if (!paramType.isPrimitive() && !paramType.equals(String.class) && !paramType.equals(Session.class) && !paramType.equals(FileUpload.class)) {
                 try {
                     Object paramObject = paramType.getDeclaredConstructor().newInstance();
                     Field[] fields = paramType.getDeclaredFields();
@@ -265,8 +277,10 @@ public class Util {
                         | NoSuchMethodException e) {
                     throw new IllegalArgumentException("Error creating parameter object: " + paramName, e);
                 }
-            } else if (paramType.equals(Session.class)) {
+            }else if (paramType.equals(Session.class)) {
                 methodParams[i] = new Session(request.getSession());
+            }else if(paramType.equals(FileUpload.class)){
+                methodParams[i] = handleFileUpload(request,paramName);
             } else {
                 String paramValue = request.getParameter(paramName);
                 if (paramValue == null) {
@@ -298,5 +312,37 @@ public class Util {
         char firstLetter = inputString.charAt(0);
         char capitalizeFirstLetter = Character.toUpperCase(firstLetter);
         return capitalizeFirstLetter + inputString.substring(1);
+    }
+
+    public static FileUpload handleFileUpload(HttpServletRequest request, String inputFileParam) throws IOException, ServletException {
+        Part filePart = request.getPart(inputFileParam); 
+        String fileName = extractFileName(filePart);
+        byte[] fileContent = filePart.getInputStream().readAllBytes();
+
+        String uploadDir = request.getServletContext().getRealPath("") + "uploads/" + fileName;
+        System.out.println("upload = "+uploadDir);
+
+        File uploadFolder = new File(uploadDir);
+        if (!uploadFolder.exists()) {
+            uploadFolder.mkdirs(); 
+        }
+
+        String uploadPath = uploadDir + File.separator + fileName;
+        System.out.println("upload = "+uploadPath);
+
+        filePart.write(uploadPath);
+
+        return new FileUpload(fileName, uploadPath, fileContent);
+    }
+
+    private static String extractFileName(Part part) {
+        String contentDisposition = part.getHeader("content-disposition");
+        String[] items = contentDisposition.split(";");
+        for (String item : items) {
+            if (item.trim().startsWith("filename")) {
+                return item.substring(item.indexOf("=") + 2, item.length() - 1);
+            }
+        }
+        return "";
     }
 }
