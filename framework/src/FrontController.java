@@ -38,6 +38,9 @@ public class FrontController extends HttpServlet {
         res.setContentType("text/html");
         PrintWriter out = res.getWriter();
         ResponsePage responsePage =Util.processUrl(urlMapping, out, req, res, controllers); 
+        if (responsePage == null) {
+            return;
+        }
         StatusCode statusCode = responsePage.getStatusCode();
         out.println("Http "+statusCode.getStatus()+":"+statusCode.getName());
         try {
@@ -50,6 +53,7 @@ public class FrontController extends HttpServlet {
         } catch (Exception e) {
             out.println(e.getMessage());
         }
+        req.getSession().setAttribute("page",req.getRequestURI());
     }
 
     public void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {

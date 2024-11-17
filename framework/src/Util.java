@@ -9,9 +9,11 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.net.MalformedURLException;
+import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.google.gson.Gson;
@@ -70,6 +72,7 @@ public class Util {
         for (Class<?> clazz : controllers) {
             Method[] methods = clazz.getDeclaredMethods();
             for (Method method : methods) {
+                
                 if (method.isAnnotationPresent(framework.Annotation.Url.class)) {
                     String url = method.getAnnotation(framework.Annotation.Url.class).value();
                     VerbeAction verbeAction = new VerbeAction();
@@ -117,8 +120,16 @@ public class Util {
         for (Method method : methods) {
             if (method.getName().equalsIgnoreCase(methodName)) {
                 method.setAccessible(true);
-                Object[] methodParams = getMethodParams(method, req);
+                
+                System.out.println("mbola nitohy fa tsy nijanona getValue");
+                Object[] methodParams = getMethodParams(method, req,res);
+                System.out.println("methode params="+methodParams);
+                if(methodParams==null){
+                    System.out.println("getValu ko null");
+                    return null;
+                }
                 Object obj =method.invoke(object, methodParams);
+
                 if(method.isAnnotationPresent(framework.Annotation.RestApi.class)){
                     if(obj instanceof ModelView m ){
                         return new Gson().toJson(m.getData());
@@ -158,67 +169,103 @@ public class Util {
         return null;
     }
     
-
     public static ResponsePage processUrl(HashMap<String, Mapping> urlMapping, PrintWriter out, HttpServletRequest req, HttpServletResponse res, ArrayList<Class<?>> controleurs) {
-        Object urlValue = null; // Initialisation de urlValue à null
+        Object urlValue = null;
         boolean trouve = false;
         String html = "";
         String url = Util.removeRootSegment(req.getRequestURI());
+        
         try {
             html += Util.header(url, controleurs);
-
+    
             for (Map.Entry<String, Mapping> entree : urlMapping.entrySet()) {
                 String cle = entree.getKey();
                 Mapping valeur = entree.getValue();
-
+    
                 if (cle.equals(url)) {
+                    VerbeAction matchingVerbe = null;
                     for (VerbeAction verbeAction : valeur.getVerbeActions()) {
-                        if (processRequest(req, valeur)!=null) {
-                            return new ResponsePage(processRequest(req, valeur), html);
+                        if (verbeAction.getVerbe().equalsIgnoreCase(req.getMethod())) {
+                            matchingVerbe = verbeAction;
+                            break;
                         }
-
-                        urlValue = Util.getValueMethod(verbeAction.getMethode(), req, res, valeur.getClassName(), url);
-
-                        html += "<BIG><p>URLMAPPING:</BIG>" + valeur.getClassName() + "_" + verbeAction.getMethode() + "</p>";
-                        html += "</br>";
-                        html += "<BIG><p>MethodeValue:</BIG>";
-                        html += urlValue;
-
-                        if (urlValue instanceof String s) {
-                            html += s;
-                        } else if (urlValue instanceof ModelView m) {
-                            Util.sendModelView(m, req, res);
-                        } else if (urlValue instanceof JsonElement j) {
-                            html += j;
-                        } else {
-                            html = "";
-                            Class<?> cls = Class.forName(valeur.getClassName());
-
-                            return new ResponsePage(new StatusCode(500,"internal server error",false,"Impossible d'obtenir la valeur pour le type " 
-                            + (urlValue == null ? "void" : urlValue.getClass()) 
-                            + " dans la méthode " + verbeAction.getMethode() 
-                            + "\n à " + valeur.getClassName() + "." 
-                            + verbeAction.getMethode() + "(" + cls.getSimpleName() + ".java)"), html); 
+                    }
+    
+                    if (matchingVerbe != null) {
+                        StatusCode processR = processRequest(req, valeur);
+                        if (processR != null) {
+                            return new ResponsePage(processR, html);
                         }
-                        trouve = true;
-                        break;
+                        try {
+                            urlValue = Util.getValueMethod(matchingVerbe.getMethode(), req, res, valeur.getClassName(), url);
+                            
+                            if (urlValue == null) {
+                                String redirectPage = (String)req.getSession().getAttribute("page");
+                                if (redirectPage != null) {
+                                    HttpSession session = req.getSession();
+                                    Map<String, String> errorMap = (Map<String, String>) session.getAttribute("validationErrors");
+                                    Map<String, Object> valueMap = (Map<String, Object>) session.getAttribute("validationValues");
+                                    
+                                    if (errorMap != null) {
+                                        for (Map.Entry<String, String> entry : errorMap.entrySet()) {
+                                            req.setAttribute(entry.getKey(), entry.getValue());
+                                            System.err.println("error="+entry.getKey()+"_value="+entry.getValue());
+                                        }
+                                        session.removeAttribute("validationErrors");
+                                    }
+                                    
+                                    if (valueMap != null) {
+                                        for (Map.Entry<String, Object> entry : valueMap.entrySet()) {
+                                            req.setAttribute(entry.getKey(), entry.getValue());
+                                            System.err.println("valueReturn="+entry.getKey()+"_valueReturnvalue="+entry.getValue());
+                                        }
+                                        session.removeAttribute("validationValues");
+                                    }
+                                    
+                                    res.sendRedirect(redirectPage);
+                                    return null;
+                                }
+                            } else {
+                                trouve = true;
+                                
+                                html += "<BIG><p>URLMAPPING:</BIG>" + valeur.getClassName() + "_" + matchingVerbe.getMethode() + "</p>";
+                                html += "</br>";
+                                html += "<BIG><p>MethodeValue:</BIG>";
+                                html += urlValue;
+    
+                                if (urlValue instanceof String s) {
+                                    html += s;
+                                } else if (urlValue instanceof ModelView m) {
+                                    Util.sendModelView(m, req, res);
+                                } else if (urlValue instanceof JsonElement j) {
+                                    html += j;
+                                } else {
+                                    Class<?> cls = Class.forName(valeur.getClassName());
+                                    return new ResponsePage(new StatusCode(500, "internal server error", false,
+                                        "Impossible d'obtenir la valeur pour le type " 
+                                        + urlValue.getClass() 
+                                        + " dans la méthode " + matchingVerbe.getMethode() 
+                                        + "\n à " + valeur.getClassName() + "." 
+                                        + matchingVerbe.getMethode() + "(" + cls.getSimpleName() + ".java)"), html);
+                                }
+                            }
+                        } catch (Exception e) {
+                            return new ResponsePage(new StatusCode(500, "internal server error", false, e.getMessage()), html);
+                        }
                     }
                     break;
                 }
             }
             
             if (!Util.isRoot(url) && !trouve) {
-                return new ResponsePage(new StatusCode(404,"url not found",false,"could not find "+req.getRequestURI()), html);
+                return new ResponsePage(new StatusCode(404, "url not found", false, "could not find " + req.getRequestURI()), html);
             }
-            return new ResponsePage(new StatusCode(200,true), html);
+            
+            return new ResponsePage(new StatusCode(200, true), html);
+        } catch (Exception e) {
+            return new ResponsePage(new StatusCode(500, "internal server error", false, e.getMessage()), html);
         }
-
-        catch (Exception e) {
-            return new ResponsePage(new StatusCode(500,"internal serveur error",false,e.getMessage()), html);
-        }
-
     }
-
     public static void processStatus(StatusCode statusCode) throws CustomException.BuildException,CustomException.RequestException{
         if (!statusCode.isSuccess() ) {
             if (statusCode.getStatus() == 500 ){
@@ -243,11 +290,12 @@ public class Util {
         return html;
     }
 
-    protected static Object[] getMethodParams(Method method, HttpServletRequest request)
-            throws Exception {
+    public static Object[] getMethodParams(Method method, HttpServletRequest request, HttpServletResponse response) throws Exception {
         Parameter[] parameters = method.getParameters();
         Object[] methodParams = new Object[parameters.length];
-
+        Map<String, String> errorMap = new HashMap<>();
+        Map<String, Object> valueMap = new HashMap<>();
+        
         for (int i = 0; i < parameters.length; i++) {
             String paramName = "";
             if (parameters[i].isAnnotationPresent(framework.Annotation.Param.class)) {
@@ -255,40 +303,65 @@ public class Util {
             } else {
                 throw new Exception("ETU2597");
             }
-
-            Class<?> paramType = parameters[i].getType();
-
-            if (!paramType.isPrimitive() && !paramType.equals(String.class) && !paramType.equals(Session.class) && !paramType.equals(FileUpload.class)) {
+            
+            Class paramType = parameters[i].getType();
+            
+            // Traitement des objets complexes (non primitifs)
+            if (!paramType.isPrimitive() && !paramType.equals(String.class) && 
+                !paramType.equals(Session.class) && !paramType.equals(FileUpload.class)) {
+                
                 try {
                     Object paramObject = paramType.getDeclaredConstructor().newInstance();
                     Field[] fields = paramType.getDeclaredFields();
-
+                    
                     for (Field field : fields) {
                         String fieldName = field.getName();
                         String fieldValue = request.getParameter(paramName + "." + fieldName);
+                        
                         if (fieldValue != null) {
                             field.setAccessible(true);
                             Object typedValue = convertToType(fieldValue, field.getType());
                             field.set(paramObject, typedValue);
                         }
                     }
+    
                     methodParams[i] = paramObject;
-                } catch (InstantiationException | IllegalAccessException | InvocationTargetException
-                        | NoSuchMethodException e) {
-                    throw new IllegalArgumentException("Error creating parameter object: " + paramName, e);
+                    
+                } catch (InstantiationException | IllegalAccessException | 
+                        InvocationTargetException | NoSuchMethodException e) {
+                    throw new IllegalArgumentException(
+                        "Error creating parameter object: " + paramName, e
+                    );
                 }
-            }else if (paramType.equals(Session.class)) {
+            }
+            else if (paramType.equals(Session.class)) {
                 methodParams[i] = new Session(request.getSession());
-            }else if(paramType.equals(FileUpload.class)){
-                methodParams[i] = handleFileUpload(request,paramName);
-            } else {
+            }
+            else if(paramType.equals(FileUpload.class)) {
+                methodParams[i] = handleFileUpload(request, paramName);
+            }
+            else {
                 String paramValue = request.getParameter(paramName);
                 if (paramValue == null) {
                     throw new IllegalArgumentException("Missing parameter " + paramName);
                 }
                 methodParams[i] = convertToType(paramValue, paramType);
             }
+            
+            List<String> errors = Contraintes.valider(methodParams[i], parameters[i]);
+            if (!errors.isEmpty()) {    
+                errorMap.put("error_" + paramName, String.join(", ", errors));
+                valueMap.put("value_" + paramName, methodParams[i]);
+            }
         }
+    
+        if (!errorMap.isEmpty()) {
+            HttpSession session = request.getSession();
+            session.setAttribute("validationErrors", errorMap);
+            session.setAttribute("validationValues", valueMap);
+            return null;
+        }
+                
         return methodParams;
     }
 
@@ -324,7 +397,7 @@ public class Util {
 
         File uploadFolder = new File(uploadDir);
         if (!uploadFolder.exists()) {
-            uploadFolder.mkdirs(); 
+            uploadFolder.mkdirs();
         }
 
         String uploadPath = uploadDir + File.separator + fileName;

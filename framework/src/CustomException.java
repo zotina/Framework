@@ -14,4 +14,11 @@ public class CustomException {
             super(message);
         }
     }
+
+    public static class ValidationException extends Exception {
+
+        public ValidationException(String message) {
+            super(message);
+        }
+    }
 }
