@@ -124,10 +124,6 @@ public class Util {
                 System.out.println("mbola nitohy fa tsy nijanona getValue");
                 Object[] methodParams = getMethodParams(method, req,res);
                 System.out.println("methode params="+methodParams);
-                if(methodParams==null){
-                    System.out.println("getValu ko null");
-                    return null;
-                }
                 Object obj =method.invoke(object, methodParams);
 
                 if(method.isAnnotationPresent(framework.Annotation.RestApi.class)){
@@ -199,55 +195,55 @@ public class Util {
                         try {
                             urlValue = Util.getValueMethod(matchingVerbe.getMethode(), req, res, valeur.getClassName(), url);
                             
-                            if (urlValue == null) {
-                                String redirectPage = (String)req.getSession().getAttribute("page");
-                                if (redirectPage != null) {
-                                    HttpSession session = req.getSession();
-                                    Map<String, String> errorMap = (Map<String, String>) session.getAttribute("validationErrors");
-                                    Map<String, Object> valueMap = (Map<String, Object>) session.getAttribute("validationValues");
-                                    
-                                    if (errorMap != null) {
-                                        for (Map.Entry<String, String> entry : errorMap.entrySet()) {
-                                            req.setAttribute(entry.getKey(), entry.getValue());
-                                            System.err.println("error="+entry.getKey()+"_value="+entry.getValue());
-                                        }
-                                        session.removeAttribute("validationErrors");
+                            String redirectPage = (String)req.getSession().getAttribute("page");
+                            if (redirectPage != null) {
+                                HttpSession session = req.getSession();
+                                Map<String, String> errorMap = (Map<String, String>) session.getAttribute("validationErrors");
+                                Map<String, Object> valueMap = (Map<String, Object>) session.getAttribute("validationValues");
+                                
+                                if (errorMap != null) {
+                                    for (Map.Entry<String, String> entry : errorMap.entrySet()) {
+                                        req.setAttribute(entry.getKey(), entry.getValue());
+                                        System.err.println("error=\""+entry.getKey()+"\"  value="+entry.getValue());
                                     }
+                                    session.removeAttribute("validationErrors");
                                     
                                     if (valueMap != null) {
                                         for (Map.Entry<String, Object> entry : valueMap.entrySet()) {
                                             req.setAttribute(entry.getKey(), entry.getValue());
-                                            System.err.println("valueReturn="+entry.getKey()+"_valueReturnvalue="+entry.getValue());
+                                            System.err.println("name=\""+entry.getKey()+"\"  value="+entry.getValue());
                                         }
                                         session.removeAttribute("validationValues");
                                     }
+                                    System.out.println(redirectPage);
+                                    // res.sendRedirect("/framework/login");
+                                    RequestDispatcher dispatcher = req.getRequestDispatcher("/framework/login");
+                                    dispatcher.forward(req, res);
                                     
-                                    res.sendRedirect(redirectPage);
                                     return null;
                                 }
-                            } else {
-                                trouve = true;
+                            }
+                            trouve = true;
                                 
-                                html += "<BIG><p>URLMAPPING:</BIG>" + valeur.getClassName() + "_" + matchingVerbe.getMethode() + "</p>";
-                                html += "</br>";
-                                html += "<BIG><p>MethodeValue:</BIG>";
-                                html += urlValue;
-    
-                                if (urlValue instanceof String s) {
-                                    html += s;
-                                } else if (urlValue instanceof ModelView m) {
-                                    Util.sendModelView(m, req, res);
-                                } else if (urlValue instanceof JsonElement j) {
-                                    html += j;
-                                } else {
-                                    Class<?> cls = Class.forName(valeur.getClassName());
-                                    return new ResponsePage(new StatusCode(500, "internal server error", false,
-                                        "Impossible d'obtenir la valeur pour le type " 
-                                        + urlValue.getClass() 
-                                        + " dans la méthode " + matchingVerbe.getMethode() 
-                                        + "\n à " + valeur.getClassName() + "." 
-                                        + matchingVerbe.getMethode() + "(" + cls.getSimpleName() + ".java)"), html);
-                                }
+                            html += "<BIG><p>URLMAPPING:</BIG>" + valeur.getClassName() + "_" + matchingVerbe.getMethode() + "</p>";
+                            html += "</br>";
+                            html += "<BIG><p>MethodeValue:</BIG>";
+                            html += urlValue;
+
+                            if (urlValue instanceof String s) {
+                                html += s;
+                            } else if (urlValue instanceof ModelView m) {
+                                Util.sendModelView(m, req, res);
+                            } else if (urlValue instanceof JsonElement j) {
+                                html += j;
+                            } else {
+                                Class<?> cls = Class.forName(valeur.getClassName());
+                                return new ResponsePage(new StatusCode(500, "internal server error", false,
+                                    "Impossible d'obtenir la valeur pour le type " 
+                                    + urlValue.getClass() 
+                                    + " dans la méthode " + matchingVerbe.getMethode() 
+                                    + "\n à " + valeur.getClassName() + "." 
+                                    + matchingVerbe.getMethode() + "(" + cls.getSimpleName() + ".java)"), html);
                             }
                         } catch (Exception e) {
                             return new ResponsePage(new StatusCode(500, "internal server error", false, e.getMessage()), html);
@@ -359,7 +355,6 @@ public class Util {
             HttpSession session = request.getSession();
             session.setAttribute("validationErrors", errorMap);
             session.setAttribute("validationValues", valueMap);
-            return null;
         }
                 
         return methodParams;
