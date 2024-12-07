@@ -8,50 +8,93 @@ import java.lang.reflect.Parameter;
 public class Contraintes {
 
     // Méthode qui applique toutes les contraintes sur l'objet
-    public static List<String> valider(Object obj, Parameter param) {
+    public static List<ResponseValidation> valider(Object obj, Annotation[] annotatsParam,String input) {
+        List<ResponseValidation> result = new ArrayList<>();
         List<String> erreurs = new ArrayList<>();
-
+    
         // Vérification des contraintes sur le paramètre
-        for (Annotation annotation : param.getAnnotations()) {
+        for (Annotation annotation : annotatsParam) {
             if (annotation instanceof framework.Annotation.NotNull notnull) {
                 if (obj == null || obj.equals("")) {
                     erreurs.add(getMessage(notnull));
                 }
             }
-
+    
             if (annotation instanceof framework.Annotation.Size sizeConstraint) {
                 if (!isValidSize(obj, sizeConstraint)) {
                     erreurs.add(getMessage(sizeConstraint));
                 }
             }
-
+    
             if (annotation instanceof framework.Annotation.Min minConstraint) {
                 if (!isValidMin(obj, minConstraint)) {
                     erreurs.add(getMessage(minConstraint));
                 }
             }
-
+    
             if (annotation instanceof framework.Annotation.Max maxConstraint) {
                 if (!isValidMax(obj, maxConstraint)) {
                     erreurs.add(getMessage(maxConstraint));
                 }
             }
-
+    
             if (annotation instanceof framework.Annotation.Email email) {
                 if (!isValidEmail(obj)) {
                     erreurs.add(getMessage(email));
                 }
             }
-
+    
             if (annotation instanceof framework.Annotation.Pattern patternConstraint) {
                 if (!isValidPattern(obj, patternConstraint)) {
                     erreurs.add(getMessage(patternConstraint));
                 }
             }
+    
+            if (annotation instanceof framework.Annotation.Valid) {
+                result.add(Contraintes.validerAttr(obj,input));
+            }
         }
-        return erreurs;
+        result.add(new ResponseValidation(input,erreurs,obj));
+        return result;
     }
     
+    public static List<ResponseValidation> validateObject(Object obj) {
+        List<ResponseValidation> errors = new ArrayList<>();
+        
+        try {
+            Class<?> objClass = obj.getClass();
+            Field[] fields = objClass.getDeclaredFields();
+            
+            for (Field field : fields) {
+                field.setAccessible(true);
+                Object fieldValue = field.get(obj);
+                errors.addAll(Contraintes.valider(fieldValue, field.getAnnotations(),field.getName()));
+            }
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        }
+        
+        return errors;
+    }
+
+    public static ResponseValidation validerAttr(Object obj, String inputName) {
+        List<ResponseValidation> errors = validateObject(obj);
+        
+        List<String> combinedErrors = new ArrayList<>();
+        Object value = null;
+        
+        for (ResponseValidation validation : errors) {
+            if (!validation.getErrors().isEmpty()) {
+                combinedErrors.addAll(validation.getErrors());
+                if (value == null) {
+                    value = validation.getValue();
+                }
+            }
+        }
+        
+        // Créer et retourner une ResponseValidation avec les erreurs combinées
+        return new ResponseValidation(inputName, combinedErrors, value);
+    }
     // Méthode pour vérifier la taille (uniquement pour les String)
     private static boolean isValidSize(Object obj, framework.Annotation.Size constraint) {
         if (obj instanceof String) {
