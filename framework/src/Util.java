@@ -113,7 +113,7 @@ public class Util {
     }
 
     public static Object getValueMethod(String methodName, HttpServletRequest req,
-            HttpServletResponse res, String className, String url) throws Exception {
+        HttpServletResponse res, String className, String url) throws Exception {
         Class<?> clazz = Class.forName(className);
         Object object = clazz.newInstance();
         Method[] methods = clazz.getMethods();
@@ -121,10 +121,28 @@ public class Util {
             if (method.getName().equalsIgnoreCase(methodName)) {
                 method.setAccessible(true);
                 
-                System.out.println("mbola nitohy fa tsy nijanona getValue");
-                Object[] methodParams = getMethodParams(method, req,res);
+                MethodParamResult paramResult = getMethodParams(method, req, res);
+                
+                // Check for validation errors
+                if (!paramResult.getErrorMap().isEmpty()) {
+                    // Retrieve the previous ModelView from session if it exists
+                    ModelView previousModelView = (ModelView) req.getSession().getAttribute("page_precedent");
+                    
+                    if (previousModelView != null) {    
+                        previousModelView.mergeValidationErrors(paramResult.getErrorMap());
+                        previousModelView.mergeValidationValues(paramResult.getValueMap());
+                        return previousModelView;
+                    }
+                }
+                
+                Object[] methodParams = paramResult.getMethodParams();
                 System.out.println("methode params="+methodParams);
-                Object obj =method.invoke(object, methodParams);
+                Object obj = method.invoke(object, methodParams);
+
+                // If the method returns a ModelView, store it in the session
+                if (obj instanceof ModelView modelView) {
+                    req.getSession().setAttribute("page_precedent", modelView);
+                }
 
                 if(method.isAnnotationPresent(framework.Annotation.RestApi.class)){
                     if(obj instanceof ModelView m ){
@@ -139,11 +157,23 @@ public class Util {
     }
 
     public static void sendModelView(ModelView modelView, HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
+        throws ServletException, IOException {
+        System.out.println(modelView.getUrl());
         for (Map.Entry<String, Object> entry : modelView.getData().entrySet()) {
             request.setAttribute(entry.getKey(), entry.getValue());
             System.out.println(entry.getKey() + "_" + entry.getValue());
         }
+
+        for (Map.Entry<String, String> errorEntry : modelView.getValidationErrors().entrySet()) {
+            request.setAttribute(errorEntry.getKey(), errorEntry.getValue());
+            System.out.println(errorEntry.getKey() + " : " + errorEntry.getValue());
+        }
+
+        for (Map.Entry<String, Object> valueEntry : modelView.getValidationValues().entrySet()) {
+            request.setAttribute(valueEntry.getKey(), valueEntry.getValue());
+            System.out.println( valueEntry.getKey() + " : " + valueEntry.getValue());
+        }
+
         RequestDispatcher dispatch = request.getRequestDispatcher(modelView.getUrl());
         dispatch.forward(request, response);
     }
@@ -195,36 +225,6 @@ public class Util {
                         try {
                             urlValue = Util.getValueMethod(matchingVerbe.getMethode(), req, res, valeur.getClassName(), url);
                             
-                            String redirectPage = (String)req.getSession().getAttribute("page");
-                            if (redirectPage != null) {
-                                HttpSession session = req.getSession();
-                                Map<String, String> errorMap = (Map<String, String>) session.getAttribute("validationErrors");
-                                Map<String, Object> valueMap = (Map<String, Object>) session.getAttribute("validationValues");
-                                
-                                if (errorMap != null) {
-                                    for (Map.Entry<String, String> entry : errorMap.entrySet()) {
-                                        req.setAttribute(entry.getKey(), entry.getValue());
-                                        System.err.println("error=\""+entry.getKey()+"\"  value="+entry.getValue());
-                                    }
-                                    session.removeAttribute("validationErrors");
-                                    
-                                    if (valueMap != null) {
-                                        for (Map.Entry<String, Object> entry : valueMap.entrySet()) {
-                                            req.setAttribute(entry.getKey(), entry.getValue());
-                                            System.err.println("name=\""+entry.getKey()+"\"  value="+entry.getValue());
-                                        }
-                                        session.removeAttribute("validationValues");
-                                    }
-                                    System.out.println(redirectPage);
-                                    // res.sendRedirect("/framework/login");
-                                    RequestDispatcher dispatcher = req.getRequestDispatcher("/framework/login");
-                                    dispatcher.forward(req, res);
-                                    
-                                    return null;
-                                }
-                            }
-                            trouve = true;
-                                
                             html += "<BIG><p>URLMAPPING:</BIG>" + valeur.getClassName() + "_" + matchingVerbe.getMethode() + "</p>";
                             html += "</br>";
                             html += "<BIG><p>MethodeValue:</BIG>";
@@ -245,6 +245,7 @@ public class Util {
                                     + "\n à " + valeur.getClassName() + "." 
                                     + matchingVerbe.getMethode() + "(" + cls.getSimpleName() + ".java)"), html);
                             }
+                            trouve = true;
                         } catch (Exception e) {
                             return new ResponsePage(new StatusCode(500, "internal server error", false, e.getMessage()), html);
                         }
@@ -286,7 +287,7 @@ public class Util {
         return html;
     }
 
-    public static Object[] getMethodParams(Method method, HttpServletRequest request, HttpServletResponse response) throws Exception {
+    public static MethodParamResult getMethodParams(Method method, HttpServletRequest request, HttpServletResponse response) throws Exception {
         Parameter[] parameters = method.getParameters();
         Object[] methodParams = new Object[parameters.length];
         Map<String, String> errorMap = new HashMap<>();
@@ -300,31 +301,14 @@ public class Util {
                 throw new Exception("ETU2597");
             }
             
-            Class paramType = parameters[i].getType();
+            Class<?> paramType = parameters[i].getType();
             
-            // Traitement des objets complexes (non primitifs)
-            if (!paramType.isPrimitive() && !paramType.equals(String.class) && 
-                !paramType.equals(Session.class) && !paramType.equals(FileUpload.class)) {
-                
+            if (!isSimpleType(paramType)) {
                 try {
-                    Object paramObject = paramType.getDeclaredConstructor().newInstance();
-                    Field[] fields = paramType.getDeclaredFields();
-                    
-                    for (Field field : fields) {
-                        String fieldName = field.getName();
-                        String fieldValue = request.getParameter(paramName + "." + fieldName);
-                        
-                        if (fieldValue != null) {
-                            field.setAccessible(true);
-                            Object typedValue = convertToType(fieldValue, field.getType());
-                            field.set(paramObject, typedValue);
-                        }
-                    }
-    
+                    Object paramObject = createAndPopulateObject(paramType, paramName, request);
                     methodParams[i] = paramObject;
                     
-                } catch (InstantiationException | IllegalAccessException | 
-                        InvocationTargetException | NoSuchMethodException e) {
+                } catch (Exception e) {
                     throw new IllegalArgumentException(
                         "Error creating parameter object: " + paramName, e
                     );
@@ -343,28 +327,75 @@ public class Util {
                 }
                 methodParams[i] = convertToType(paramValue, paramType);
             }
-            
-            List<String> errors = Contraintes.valider(methodParams[i], parameters[i]);
-            if (!errors.isEmpty()) {    
-                errorMap.put("error_" + paramName, String.join(", ", errors));
-                valueMap.put("value_" + paramName, methodParams[i]);
+    
+            if (parameters[i].isAnnotationPresent(framework.Annotation.Valid.class)) {
+                List<ResponseValidation> errors = Contraintes.validateObject(methodParams[i]);
+                for (ResponseValidation responseValidation : errors) {
+                    if (!responseValidation.getErrors().isEmpty()) {
+                        errorMap.put("error_" + responseValidation.getInputName(), 
+                                     String.join(", ", responseValidation.getErrors()));
+                        valueMap.put("value_" + responseValidation.getInputName(), 
+                                     responseValidation.getValue());
+                    }
+                }
+            } else {
+                List<ResponseValidation> errors = Contraintes.valider(methodParams[i], 
+                                                                      parameters[i].getAnnotations(), 
+                                                                      paramName);
+                if (!errors.get(0).getErrors().isEmpty()) {
+                    errorMap.put("error_" + paramName, String.join(", ", errors.get(0).getErrors()));
+                    valueMap.put("value_" + paramName, methodParams[i]);
+                }
             }
         }
+        
+        return new MethodParamResult(methodParams, errorMap, valueMap);
+    }
     
-        if (!errorMap.isEmpty()) {
-            HttpSession session = request.getSession();
-            session.setAttribute("validationErrors", errorMap);
-            session.setAttribute("validationValues", valueMap);
-        }
+    private static Object createAndPopulateObject(Class<?> paramType, String paramName, 
+                                                  HttpServletRequest request) throws Exception {
+        Object paramObject = paramType.getDeclaredConstructor().newInstance();
+        Field[] fields = paramType.getDeclaredFields();
+        
+        for (Field field : fields) {
+            String fieldName = field.getName();
+            String fullParamName = paramName + "." + fieldName;
+            
+            if (isSimpleType(field.getType())) {
+                String fieldValue = request.getParameter(fullParamName);
                 
-        return methodParams;
+                if (fieldValue != null) {
+                    field.setAccessible(true);
+                    Object typedValue = convertToType(fieldValue, field.getType());
+                    field.set(paramObject, typedValue);
+                }
+            } else {
+                Object nestedObject = createAndPopulateObject(field.getType(), fullParamName, request);
+                field.setAccessible(true);
+                field.set(paramObject, nestedObject);
+            }
+        }
+        
+        return paramObject;
+    }
+    
+    private static boolean isSimpleType(Class<?> type) {
+        return type.isPrimitive() || 
+               type.equals(String.class) || 
+               type.equals(Session.class) || 
+               type.equals(FileUpload.class) ||
+               type.equals(Integer.class) ||
+               type.equals(Long.class) ||
+               type.equals(Double.class) ||
+               type.equals(Float.class) ||
+               type.equals(Boolean.class);
     }
 
     private static Object convertToType(String paramValue, Class<?> type) throws Exception {
         if (paramValue == null || type == null) {
             return null;
         }
-
+        
         if (type == String.class) {
             return paramValue;
         } else if (type == Integer.class || type == int.class) {
