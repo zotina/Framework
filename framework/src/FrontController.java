@@ -27,9 +27,7 @@ public class FrontController extends HttpServlet {
             controllers = Util.scanClasses(controllerPackage, getServletContext(), Annotation.Controller.class);
             System.out.println("n of controller: " + controllers.size());
             urlMapping = Util.getUrlMapping(controllers);
-        } catch (
-
-        Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
