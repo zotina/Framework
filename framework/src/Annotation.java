@@ -34,6 +34,11 @@ public interface Annotation {
     }
 
     @Retention(RetentionPolicy.RUNTIME)
+    public @interface Auth {
+        String value() ;
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.PARAMETER, ElementType.FIELD})
     public @interface Valid {
     }
