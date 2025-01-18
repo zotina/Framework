@@ -1,13 +1,13 @@
 @echo off
 for /F "tokens=*" %%A in (config.conf) do set "%%A"
 
-set "destinationFolder=%root%\bin"
-cd "%root%\src"
+set "destinationFolder=%root%\build\framework"
+cd "%root%\framework\src"
 
 javac -d "%destinationFolder%" -cp "D:\etude\S5\Mr Naina\Framework\local\lib\*" *.java
 
 
-cd "%root%\bin"
-jar -cvf "../jar/framework.jar" .
+cd "%root%\build\framework"
+jar -cvf "%root%\lib\framework.jar" .
 
 pause
