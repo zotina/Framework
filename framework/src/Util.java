@@ -19,6 +19,7 @@ import java.util.Map;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 
+import framework.CustomException;
 import framework.CustomException.RequestException;
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
@@ -68,9 +69,17 @@ public class Util {
     }
 
     public static HashMap<String, Mapping> getUrlMapping(ArrayList<Class<?>> controllers)
-        throws CustomException.RequestException {
+        throws CustomException.BuildException {
         HashMap<String, Mapping> urlMapping = new HashMap<>();
+        boolean classAnnotedAUth = false;
+        String profil="";
         for (Class<?> clazz : controllers) {
+
+            if(clazz.isAnnotationPresent(framework.Annotation.Auth.class)){
+                classAnnotedAUth = true;
+                profil = clazz.getAnnotation(framework.Annotation.Auth.class).value();
+            }
+
             Method[] methods = clazz.getDeclaredMethods();
             for (Method method : methods) {
                 
@@ -82,11 +91,23 @@ public class Util {
 
                     if (!urlMapping.containsKey(url)) {
                         Mapping mapping = new Mapping();
-                        if (method.isAnnotationPresent(framework.Annotation.Auth.class)) {
-                            String profil = method.getAnnotation(framework.Annotation.Auth.class).value();
+
+                        if(classAnnotedAUth){
                             mapping.setNeedAuth(true);
                             mapping.setProfil(profil);
                         }
+
+                        if (method.isAnnotationPresent(framework.Annotation.Auth.class)) {
+
+                            if(classAnnotedAUth){
+                                throw new CustomException.BuildException(clazz.getName() +" is already annoted Auth , remove @Auth on method");
+                            }
+
+                            profil = method.getAnnotation(framework.Annotation.Auth.class).value();
+                            mapping.setNeedAuth(true);
+                            mapping.setProfil(profil);
+                        }
+
                         mapping.setClassName(clazz.getName());
                         mapping.setVerbeActions(new ArrayList<>());
                         mapping.getVerbeActions().add(verbeAction);
@@ -95,8 +116,10 @@ public class Util {
                         Mapping existingMapping = urlMapping.get(url);
                         existingMapping.getVerbeActions().add(verbeAction);
                     }
+                    
                 }
             }
+            classAnnotedAUth = false;
         }
         return urlMapping;
     }
@@ -200,14 +223,19 @@ public class Util {
         
         return null;
     }
-    public static void checkAuthProfil(Mapping mapping,HttpServletRequest req)throws CustomException.RequestException{
+    public static void checkAuthProfil(Mapping mapping,HttpServletRequest req,String hote_name)throws CustomException.RequestException{
+        String hote = "hote";
+        if(hote_name != null && hote_name != ""){
+            hote = hote_name;
+        }
+        
         if (mapping.isNeedAuth()) {
-            if(!mapping.getProfil().equals(req.getSession().getAttribute("hote"))){
+            if(!mapping.getProfil().equals(req.getSession().getAttribute(hote))){
                 throw new CustomException.RequestException("unauthorize");
             }
         }
     }
-    public static ResponsePage processUrl(HashMap<String, Mapping> urlMapping, PrintWriter out, HttpServletRequest req, HttpServletResponse res, ArrayList<Class<?>> controleurs){
+    public static ResponsePage processUrl(HashMap<String, Mapping> urlMapping, PrintWriter out, HttpServletRequest req, HttpServletResponse res, ArrayList<Class<?>> controleurs,String hote_name){
         Object urlValue = null;
         boolean trouve = false;
         String html = "";
@@ -220,7 +248,7 @@ public class Util {
                 String cle = entree.getKey();
                 Mapping valeur = entree.getValue();
                 try {
-                    checkAuthProfil(valeur,req);
+                    checkAuthProfil(valeur,req,hote_name);
                 } catch (CustomException.RequestException e) {
                     return new ResponsePage(new StatusCode(401, "unauthorize", false, e.getMessage()), html);
                 }

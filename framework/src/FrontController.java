@@ -2,6 +2,7 @@ package framework;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -14,19 +15,21 @@ import jakarta.servlet.http.*;
 public class FrontController extends HttpServlet {
     private ArrayList<Class<?>> controllers;
     private HashMap<String, Mapping> urlMapping;    
+    private String hote_name;
 
-    public void init() throws ServletException {
-        super.init();
-        String controllerPackage = getServletConfig().getInitParameter("packageController");
-        if (controllerPackage == null || controllerPackage.length() == 0) {
-            controllerPackage = "WEB-INF/classes";
-        } else {
-            controllerPackage = "WEB-INF/classes/" + controllerPackage.replace('.', '/');
-        }
+    public void init()  {
         try {
-            controllers = Util.scanClasses(controllerPackage, getServletContext(), Annotation.Controller.class);
-            System.out.println("n of controller: " + controllers.size());
-            urlMapping = Util.getUrlMapping(controllers);
+            super.init();
+            String controllerPackage = getServletConfig().getInitParameter("packageController");
+            this.hote_name = getServletConfig().getInitParameter("auth");
+            if (controllerPackage == null || controllerPackage.length() == 0) {
+                controllerPackage = "WEB-INF/classes";
+            } else {
+                controllerPackage = "WEB-INF/classes/" + controllerPackage.replace('.', '/');
+            }
+                controllers = Util.scanClasses(controllerPackage, getServletContext(), Annotation.Controller.class);
+                System.out.println("n of controller: " + controllers.size());
+                urlMapping = Util.getUrlMapping(controllers);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -35,7 +38,7 @@ public class FrontController extends HttpServlet {
     public void processRequest(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         res.setContentType("text/html");
         PrintWriter out = res.getWriter();
-        ResponsePage responsePage =Util.processUrl(urlMapping, out, req, res, controllers); 
+        ResponsePage responsePage =Util.processUrl(urlMapping, out, req, res, controllers,this.hote_name); 
         if (responsePage == null) {
             return;
         }
