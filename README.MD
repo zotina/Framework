@@ -1,14 +1,14 @@
-# Framework Personnalisé - Documentation
+# Custom Framework - Documentation
 
 ## Introduction
-Ce framework personnalisé a été conçu pour simplifier le développement d'applications Java basées sur des servlets. Il fournit des annotations pour la gestion des routes, des requêtes HTTP, des sessions, des fichiers uploadés, ainsi que des fonctionnalités d'authentification et de validation.
+This custom framework is designed to simplify the development of Java applications based on servlets. It provides annotations for managing routes, HTTP requests, sessions, uploaded files, as well as authentication and validation features.
 
 ---
 
 ## Configuration
 
-### 1. Configuration du fichier `web.xml`
-Ajoutez la configuration suivante dans votre fichier `web.xml` :
+### 1. Configuring the `web.xml` file
+Add the following configuration to your `web.xml` file:
 
 ```xml
 <servlet>
@@ -16,7 +16,7 @@ Ajoutez la configuration suivante dans votre fichier `web.xml` :
     <servlet-class>framework.FrontController</servlet-class>
     <init-param>
         <param-name>packageController</param-name>
-        <param-value>[NomDuPackageDeVosControllers]</param-value>
+        <param-value>[YourControllersPackageName]</param-value>
     </init-param>
 </servlet>
 
@@ -26,49 +26,49 @@ Ajoutez la configuration suivante dans votre fichier `web.xml` :
 </servlet-mapping>
 ```
 
-- Remplacez `[NomDuPackageDeVosControllers]` par le package contenant vos contrôleurs.
-- Tous les contrôleurs doivent être annotés avec `@Controller`.
-- Pour configurer l'authentification, ajoutez :
+- Replace `[YourControllersPackageName]` with the package containing your controllers.
+- All controllers must be annotated with `@Controller`.
+- To configure authentication, add:
 
 ```xml
 <init-param>
     <param-name>auth</param-name>
-    <param-value>{nom_hote}</param-value>
+    <param-value>{host_name}</param-value>
 </init-param>
 ```
 
 ---
 
-## Guide d'utilisation
+## Usage Guide
 
-### Annotations disponibles
+### Available Annotations
 
 #### 1. `@Url`
-Permet de définir l'URL d'accès à un contrôleur.
+Defines the URL access for a controller.
 
-#### 2. `@Post` et `@Get`
-Indiquent le type de requête HTTP (POST ou GET) supporté par une méthode du contrôleur.
+#### 2. `@Post` and `@Get`
+Indicates the type of HTTP request (POST or GET) supported by a controller method.
 
 #### 3. `@Param`
-Permet de manipuler les valeurs envoyées au contrôleur via des paramètres de requête.
+Allows manipulation of values sent to the controller via query parameters.
 
-Exemple :
+Example:
 ```java
 @Param("id")
 private int id;
 ```
 
 #### 4. `@RestApi`
-Annotez vos contrôleurs REST API avec `@RestApi` pour indiquer qu'ils retournent des réponses JSON.
+Annotate your REST API controllers with `@RestApi` to indicate that they return JSON responses.
 
 ---
 
-## Gestion des sessions
+## Session Management
 
-Deux possibilités s'offrent à vous pour manipuler les sessions :
+There are two ways to handle sessions:
 
-1. En utilisant `@Param("session") Session` en argument de méthode.
-2. En déclarant un attribut `Session` dans votre contrôleur :
+1. Using `@Param("session") Session` as a method argument.
+2. Declaring a `Session` attribute in your controller:
 
 ```java
 @Controller
@@ -83,28 +83,28 @@ public class LoginController {
 
 ---
 
-## Gestion des fichiers uploadés
+## File Upload Management
 
-Pour permettre l'upload de fichiers, utilisez la classe `FileUpload` :
+To enable file uploads, use the `FileUpload` class:
 
 ```java
 @Param("pdp")
 FileUpload pdp;
 ```
 
-Le fichier uploadé sera récupérable sous forme d'objet `FileUpload`.
+The uploaded file will be retrieved as a `FileUpload` object.
 
 ---
 
-## Validation des données
+## Data Validation
 
-Le framework supporte les annotations de validation suivantes :
-- `@Valid` : Valide un objet entier
-- `@Email` : Vérifie que la valeur est une adresse email valide
-- `@NotNull` : Assure que la valeur n'est pas `null`
-- `@Min(value)` : Définit une valeur minimale pour un champ numérique
+The framework supports the following validation annotations:
+- `@Valid`: Validates an entire object
+- `@Email`: Checks that the value is a valid email address
+- `@NotNull`: Ensures that the value is not `null`
+- `@Min(value)`: Sets a minimum value for a numeric field
 
-Exemple :
+Example:
 ```java
 public class User {
     @NotNull
@@ -117,29 +117,29 @@ public class User {
 
 ---
 
-## Gestion de l'authentification
+## Authentication Management
 
-Vous pouvez restreindre l'accès aux fonctions ou aux classes en utilisant `@Auth("Role")`.
+You can restrict access to functions or classes using `@Auth("Role")`.
 
-### Au niveau des méthodes
+### At the Method Level
 ```java
 @Auth("Admin")
 public void adminOnlyFunction() {
-    // Code accessible uniquement aux admins
+    // Code accessible only to admins
 }
 ```
 
-### Au niveau des classes
+### At the Class Level
 ```java
 @Auth("User")
 @Controller
 public class UserController {
-    // Toutes les méthodes de cette classe seront accessibles uniquement aux utilisateurs ayant le rôle "User"
+    // All methods in this class will be accessible only to users with the "User" role
 }
 ```
 
 ---
 
-## Contact et Support
-Si vous avez des questions ou des problèmes concernant l'utilisation de ce framework personnalisé, n'hésitez pas à nous contacter à l'adresse email suivante : **zotinafiti@gmail.com**.
+## Contact and Support
+If you have any questions or issues regarding the use of this custom framework, feel free to contact us at the following email address: **zotinafiti@gmail.com**.
 
