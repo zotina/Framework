@@ -10,6 +10,11 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.net.MalformedURLException;
 import java.net.http.HttpResponse;
+import java.sql.Date;
+import java.sql.Time;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -31,7 +36,7 @@ public class Util {
         ArrayList<Class<?>> classes = new ArrayList<>();
 
         // Scanner la première source (Controllers)
-        classes.addAll(scanSingleSource(source2, servletContext, cla));
+        classes.addAll(scanSingleSource(source1, servletContext, cla));
 
         // Scanner la deuxième source (Models)
         if (!source1.equals(source2)) {
@@ -84,20 +89,21 @@ public class Util {
     }
 
     public static HashMap<String, Mapping> getUrlMapping(ArrayList<Class<?>> controllers)
-        throws CustomException.BuildException {
+    throws CustomException.BuildException {
+
         HashMap<String, Mapping> urlMapping = new HashMap<>();
-        boolean classAnnotedAUth = false;
-        String profil="";
+        boolean classAnnotedAuth = false;
+        String profil = "";
+
         for (Class<?> clazz : controllers) {
 
-            if(clazz.isAnnotationPresent(framework.Annotation.Auth.class)){
-                classAnnotedAUth = true;
+            if (clazz.isAnnotationPresent(framework.Annotation.Auth.class)) {
+                classAnnotedAuth = true;
                 profil = clazz.getAnnotation(framework.Annotation.Auth.class).value();
             }
 
             Method[] methods = clazz.getDeclaredMethods();
             for (Method method : methods) {
-                
                 if (method.isAnnotationPresent(framework.Annotation.Url.class)) {
                     String url = method.getAnnotation(framework.Annotation.Url.class).value();
                     VerbeAction verbeAction = new VerbeAction();
@@ -107,17 +113,15 @@ public class Util {
                     if (!urlMapping.containsKey(url)) {
                         Mapping mapping = new Mapping();
 
-                        if(classAnnotedAUth){
+                        if (classAnnotedAuth) {
                             mapping.setNeedAuth(true);
                             mapping.setProfil(profil);
                         }
 
                         if (method.isAnnotationPresent(framework.Annotation.Auth.class)) {
-
-                            if(classAnnotedAUth){
-                                throw new CustomException.BuildException(clazz.getName() +" is already annoted Auth , remove @Auth on method");
+                            if (classAnnotedAuth) {
+                                throw new CustomException.BuildException(clazz.getName() + " is already annotated @Auth, remove @Auth on method");
                             }
-
                             profil = method.getAnnotation(framework.Annotation.Auth.class).value();
                             mapping.setNeedAuth(true);
                             mapping.setProfil(profil);
@@ -131,10 +135,9 @@ public class Util {
                         Mapping existingMapping = urlMapping.get(url);
                         existingMapping.getVerbeActions().add(verbeAction);
                     }
-                    
                 }
             }
-            classAnnotedAUth = false;
+            classAnnotedAuth = false;
         }
         return urlMapping;
     }
@@ -369,6 +372,7 @@ public class Util {
                     methodParams[i] = paramObject;
                     
                 } catch (Exception e) {
+                    e.printStackTrace();
                     throw new IllegalArgumentException(
                         "Error creating parameter object: " + paramName, e
                     );
@@ -386,6 +390,7 @@ public class Util {
                     throw new IllegalArgumentException("Missing parameter " + paramName);
                 }
                 methodParams[i] = convertToType(paramValue, paramType);
+                
             }
     
             if (parameters[i].isAnnotationPresent(framework.Annotation.Valid.class)) {
@@ -411,12 +416,37 @@ public class Util {
         
         return new MethodParamResult(methodParams, errorMap, valueMap);
     }
-    
-    private static Object createAndPopulateObject(Class<?> paramType, String paramName, 
-                                                  HttpServletRequest request) throws Exception {
-        Object paramObject = paramType.getDeclaredConstructor().newInstance();
-        Field[] fields = paramType.getDeclaredFields();
+    private static boolean isSpecialType(Class<?> type) {
+        return type == LocalDateTime.class 
+            || type == LocalDate.class 
+            || type == LocalTime.class;
+    }
+
+    private static Object createSpecialTypeInstance(Class<?> type, String value) {
+        if (value == null || value == "")  
+            return null;
         
+        if (type == LocalDateTime.class) {
+            return LocalDateTime.parse(value);
+        } else if (type == LocalDate.class) {
+            return LocalDate.parse(value);
+        } else if (type == LocalTime.class) {
+            return LocalTime.parse(value);
+        }   
+        return null;
+    }
+    
+    private static Object createAndPopulateObject(Class<?> paramType, String paramName,HttpServletRequest request) throws Exception {
+        Object paramObject = null;
+        Field[] fields=null;
+        if(isSpecialType(paramType)){
+            return createSpecialTypeInstance(paramType, request.getParameter(paramName));
+        }else{
+            paramObject = paramType.getDeclaredConstructor().newInstance();
+            fields = paramType.getDeclaredFields();
+    
+        }        
+
         for (Field field : fields) {
             String fieldName = field.getName();
             String fullParamName = paramName + "." + fieldName;
@@ -448,6 +478,9 @@ public class Util {
                type.equals(Long.class) ||
                type.equals(Double.class) ||
                type.equals(Float.class) ||
+               type.equals(LocalDate.class) ||
+               type.equals(Time.class) ||
+               type.equals(Date.class) ||
                type.equals(Boolean.class);
     }
 
@@ -456,15 +489,14 @@ public class Util {
             return null;
         }
         
-        if (type == String.class) {
-            return paramValue;
-        } else if (type == Integer.class || type == int.class) {
+        if (type == Integer.class || type == int.class) {
             return Integer.parseInt(paramValue);
         } else if (type == Double.class || type == double.class) {
             return Double.parseDouble(paramValue);
+        }else{
+            return paramValue;
         }
 
-        return null;
     }
 
     public static String capitalize(String inputString) {

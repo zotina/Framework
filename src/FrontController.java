@@ -9,7 +9,7 @@ import java.util.HashMap;
 import jakarta.servlet.*;
 import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.http.*;
-
+import jakarta.servlet.http.HttpSession;
 
 @MultipartConfig
 public class FrontController extends HttpServlet {
@@ -45,7 +45,6 @@ public class FrontController extends HttpServlet {
             controllers = Util.scanClasses(controllerPackage, modelPackage, getServletContext(), Annotation.Controller.class);
             System.out.println("Number of controllers: " + controllers.size());
     
-            // Mapper les URLs
             urlMapping = Util.getUrlMapping(controllers);
         } catch (Exception e) {
             e.printStackTrace();
