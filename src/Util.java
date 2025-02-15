@@ -26,44 +26,59 @@ import jakarta.servlet.http.*;
 
 public class Util {
 
-    public static ArrayList<Class<?>> scanClasses(String source, ServletContext servletContext, Class<?> cla)
-            throws MalformedURLException, ClassNotFoundException {
+    public static ArrayList<Class<?>> scanClasses(String source1, String source2, ServletContext servletContext, Class<?> cla)
+    throws MalformedURLException, ClassNotFoundException {
         ArrayList<Class<?>> classes = new ArrayList<>();
 
-        String classPath = servletContext.getResource(source).getPath().substring(1).replace("%20", " ");
+        // Scanner la première source (Controllers)
+        classes.addAll(scanSingleSource(source2, servletContext, cla));
+
+        // Scanner la deuxième source (Models)
+        if (!source1.equals(source2)) {
+            classes.addAll(scanSingleSource(source2, servletContext, cla));
+        }
+
+        return classes;
+    }
+
+    private static ArrayList<Class<?>> scanSingleSource(String source, ServletContext servletContext, Class<?> cla)
+        throws MalformedURLException, ClassNotFoundException {
+        ArrayList<Class<?>> classes = new ArrayList<>();
+
+        String classPath = "/" + servletContext.getResource(source).getPath().substring(1).replace("%20", " ");
+        System.out.println("class path: " + classPath);
         File[] packages = new File(classPath).listFiles();
 
         if (packages != null) {
             for (File pkg : packages) {
                 if (pkg.isFile() && pkg.getName().endsWith(".class")) {
-                    String className = source.substring("WEB-INF.classes".length()).replace('/', '.');
-                    
+                    String className = source.substring("WEB-INF/classes".length()).replace('/', '.');
+
                     if (className.startsWith(".")) {
                         className = className.substring(1);
                     }
                     if (className.length() > 0 && !className.endsWith(".")) {
                         className += ".";
                     }
-                    
-                    className += pkg.getName().substring(0, pkg.getName().length() - ".class".length()).replace('/',
-                    '.');
+
+                    className += pkg.getName().substring(0, pkg.getName().length() - ".class".length()).replace('/', '.');
                     System.out.println("class processed: " + className);
-                    
+
                     Class<?> clazz = Class.forName(className);
                     System.out.println("class: " + clazz);
                     System.out.println(Arrays.toString(clazz.getAnnotations()));
-                    if (clazz.isAnnotationPresent((Class<? extends Annotation>) cla)) {
+                    if (clazz.isAnnotationPresent((Class<? extends java.lang.annotation.Annotation>) cla)) {
                         classes.add(clazz);
                         System.out.println("class added: " + clazz);
                     }
                     System.out.println();
-                }
-                
-                else if (pkg.isDirectory()) {
+                } else if (pkg.isDirectory()) {
                     System.out.println("directory found: " + pkg);
-                    classes.addAll(scanClasses(source + "/" + pkg.getName(), servletContext, cla));
+                    classes.addAll(scanSingleSource(source + "/" + pkg.getName(), servletContext, cla));
                 }
             }
+        } else {
+            System.out.println("packages null for source: " + source);
         }
         return classes;
     }
