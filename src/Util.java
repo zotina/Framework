@@ -8,10 +8,13 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.net.MalformedURLException;
 import java.net.http.HttpResponse;
 import java.sql.Date;
 import java.sql.Time;
+import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -20,6 +23,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.lang.reflect.Array;
+
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
@@ -436,37 +441,86 @@ public class Util {
         return null;
     }
     
-    private static Object createAndPopulateObject(Class<?> paramType, String paramName,HttpServletRequest request) throws Exception {
-        Object paramObject = null;
-        Field[] fields=null;
-        if(isSpecialType(paramType)){
-            return createSpecialTypeInstance(paramType, request.getParameter(paramName));
-        }else{
-            paramObject = paramType.getDeclaredConstructor().newInstance();
-            fields = paramType.getDeclaredFields();
+    public static Object createAndPopulateObject(Class<?> paramType, String paramName, 
+    HttpServletRequest request) throws Exception {
     
-        }        
+        // Gérer les tableaux et les listes
+        if (paramType.isArray()) {
+            System.out.println("Détection d'un tableau : " + paramType.getComponentType().getName());
+
+            Class<?> componentType = paramType.getComponentType();
+            List<Object> tempList = new ArrayList<>();
+
+            int i = 0;
+            while (true) {
+                String indexedParam = paramName + "[" + i + "]";
+                boolean foundData = false;
+                Object newObject = createAndPopulateObject(componentType, indexedParam, request);
+
+                if (newObject != null) {
+                    tempList.add(newObject);
+                    foundData = true;
+                }
+
+                if (!foundData) break;
+                i++;
+            }
+
+            return tempList.toArray((Object[]) Array.newInstance(componentType, tempList.size()));
+        }    
+
+        // Gérer les types spéciaux (ex: Date, LocalDateTime)
+        if (isSpecialType(paramType)) {
+            String paramValue = request.getParameter(paramName);
+            return createSpecialTypeInstance(paramType, paramValue);
+        }
+
+        // Gérer les objets complexes
+        Object paramObject;
+        try {
+            paramObject = paramType.getDeclaredConstructor().newInstance();
+        } catch (NoSuchMethodException e) {
+            if (paramType.isInterface()) {
+                return null;
+            }
+            throw e;
+        }
+
+        // Itérer sur les champs de l'objet
+        Field[] fields = paramType.getDeclaredFields();
+        boolean hasData = false;
 
         for (Field field : fields) {
             String fieldName = field.getName();
             String fullParamName = paramName + "." + fieldName;
-            
+            field.setAccessible(true);
+
             if (isSimpleType(field.getType())) {
                 String fieldValue = request.getParameter(fullParamName);
-                
-                if (fieldValue != null) {
-                    field.setAccessible(true);
+                if (fieldValue != null && !fieldValue.isEmpty()) {
                     Object typedValue = convertToType(fieldValue, field.getType());
                     field.set(paramObject, typedValue);
+                    hasData = true;
                 }
             } else {
                 Object nestedObject = createAndPopulateObject(field.getType(), fullParamName, request);
-                field.setAccessible(true);
-                field.set(paramObject, nestedObject);
+                if (nestedObject != null) {
+                    field.set(paramObject, nestedObject);
+                    hasData = true;
+                }
             }
         }
-        
-        return paramObject;
+
+        return hasData ? paramObject : null;
+    }
+
+// Méthode auxiliaire pour obtenir le type générique d'une liste
+    private static Class<?> getGenericType(Class<?> listClass) {
+        Type genericSuperclass = listClass.getGenericSuperclass();
+        if (genericSuperclass instanceof ParameterizedType) {
+            return (Class<?>) ((ParameterizedType) genericSuperclass).getActualTypeArguments()[0];
+        }
+        return Object.class;
     }
     
     private static boolean isSimpleType(Class<?> type) {
@@ -478,8 +532,6 @@ public class Util {
                type.equals(Long.class) ||
                type.equals(Double.class) ||
                type.equals(Float.class) ||
-               type.equals(LocalDate.class) ||
-               type.equals(Time.class) ||
                type.equals(Date.class) ||
                type.equals(Boolean.class);
     }
@@ -488,15 +540,22 @@ public class Util {
         if (paramValue == null || type == null) {
             return null;
         }
-        
+
         if (type == Integer.class || type == int.class) {
             return Integer.parseInt(paramValue);
+        } else if (type == Long.class || type == long.class) {
+            return Long.parseLong(paramValue);
         } else if (type == Double.class || type == double.class) {
             return Double.parseDouble(paramValue);
-        }else{
+        } else if (type == Float.class || type == float.class) {
+            return Float.parseFloat(paramValue);
+        } else if (type == Boolean.class || type == boolean.class) {
+            return Boolean.parseBoolean(paramValue);
+        } else if (type == Date.class) {
+            return Date.valueOf(paramValue);
+        } else {
             return paramValue;
         }
-
     }
 
     public static String capitalize(String inputString) {
