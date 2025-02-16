@@ -105,6 +105,7 @@ public class Util {
             if (clazz.isAnnotationPresent(framework.Annotation.Auth.class)) {
                 classAnnotedAuth = true;
                 profil = clazz.getAnnotation(framework.Annotation.Auth.class).value();
+                System.out.println(clazz.getName() + " is annoted Auth");
             }
 
             Method[] methods = clazz.getDeclaredMethods();
@@ -121,15 +122,17 @@ public class Util {
                         if (classAnnotedAuth) {
                             mapping.setNeedAuth(true);
                             mapping.setProfil(profil);
+                            System.out.println(method.getName() + " is annoted Auth");
                         }
 
                         if (method.isAnnotationPresent(framework.Annotation.Auth.class)) {
                             if (classAnnotedAuth) {
-                                throw new CustomException.BuildException(clazz.getName() + " is already annotated @Auth, remove @Auth on method");
+                                throw new CustomException.BuildException(clazz.getName() + " is already annoted @Auth, remove @Auth on method");
                             }
                             profil = method.getAnnotation(framework.Annotation.Auth.class).value();
                             mapping.setNeedAuth(true);
                             mapping.setProfil(profil);
+                            System.out.println(method.getName() + " is annoted Auth");
                         }
 
                         mapping.setClassName(clazz.getName());
@@ -246,7 +249,7 @@ public class Util {
         
         return null;
     }
-    public static void checkAuthProfil(Mapping mapping,HttpServletRequest req,String hote_name)throws CustomException.RequestException{
+    public static StatusCode checkAuthProfil(Mapping mapping,HttpServletRequest req,String hote_name)throws CustomException.RequestException{
         String hote = "hote";
         if(hote_name != null && hote_name != ""){
             hote = hote_name;
@@ -254,11 +257,13 @@ public class Util {
         
         if (mapping.isNeedAuth()) {
             if(!mapping.getProfil().equals(req.getSession().getAttribute(hote))){
-                throw new CustomException.RequestException("unauthorize");
+                return new StatusCode(401,"Unauthorise",false,"");
             }
         }
+        return null;
     }
-    public static ResponsePage processUrl(HashMap<String, Mapping> urlMapping, PrintWriter out, HttpServletRequest req, HttpServletResponse res, ArrayList<Class<?>> controleurs,String hote_name){
+    public static ResponsePage processUrl(HashMap<String, Mapping> urlMapping, PrintWriter out, HttpServletRequest req, HttpServletResponse res, ArrayList<Class<?>> controleurs,String hote_name)throws CustomException.BuildException ,
+    CustomException.RequestException , Exception{
         Object urlValue = null;
         boolean trouve = false;
         String html = "";
@@ -270,13 +275,13 @@ public class Util {
             for (Map.Entry<String, Mapping> entree : urlMapping.entrySet()) {
                 String cle = entree.getKey();
                 Mapping valeur = entree.getValue();
-                try {
-                    checkAuthProfil(valeur,req,hote_name);
-                } catch (CustomException.RequestException e) {
-                    return new ResponsePage(new StatusCode(401, "unauthorize", false, e.getMessage()), html);
-                }
-
+                
                 if (cle.equals(url)) {
+                    valeur.getClassName();
+
+                    if(checkAuthProfil(valeur,req,hote_name)!=null)
+                        return  new ResponsePage(checkAuthProfil(valeur,req,hote_name),html);
+
                     VerbeAction matchingVerbe = null;
                     for (VerbeAction verbeAction : valeur.getVerbeActions()) {
                         if (verbeAction.getVerbe().equalsIgnoreCase(req.getMethod())) {
@@ -327,9 +332,14 @@ public class Util {
             }
             
             return new ResponsePage(new StatusCode(200, true), html);
+        } catch (CustomException.RequestException e) {
+            e.printStackTrace();
+            throw e; 
         } catch (Exception e) {
-            return new ResponsePage(new StatusCode(500, "internal server error", false, e.getMessage()), html);
+            e.printStackTrace();
+            throw e;
         }
+        
     }
     public static void processStatus(StatusCode statusCode) throws CustomException.BuildException,CustomException.RequestException{
         if (!statusCode.isSuccess() ) {
