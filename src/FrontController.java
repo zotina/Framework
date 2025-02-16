@@ -54,13 +54,13 @@ public class FrontController extends HttpServlet {
     public void processRequest(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException {
         res.setContentType("text/html");
         PrintWriter out = res.getWriter();
-        ResponsePage responsePage =Util.processUrl(urlMapping, out, req, res, controllers,this.hote_name); 
-        if (responsePage == null) {
-            return;
-        }
-        StatusCode statusCode = responsePage.getStatusCode();
-        out.println("Http "+statusCode.getStatus()+":"+statusCode.getName());
         try {
+            ResponsePage responsePage =Util.processUrl(urlMapping, out, req, res, controllers,this.hote_name); 
+            if (responsePage == null) {
+                return;
+            }
+            StatusCode statusCode = responsePage.getStatusCode();
+            out.println("Http "+statusCode.getStatus()+":"+statusCode.getName());
             Util.processStatus(statusCode);
             out.println(responsePage.getHtml());
         } catch (CustomException.BuildException e) {
